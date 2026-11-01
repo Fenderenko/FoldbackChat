@@ -5,7 +5,7 @@
   const KEY = 'fc.settings.v1';
 
   FC.DEF = {
-    twitch: 'fndr7x', twitchOn: true, youtube: '', ytOn: true, lang: 'auto',
+    twitch: '', twitchOn: true, youtube: '', ytOn: true, lang: 'auto',
     // Look
     style: 'cards', font: 17, emoteSize: 1.6, letter: true, showPlatform: true, showTime: false, showBadges: true,
     fontName: 'plex', fontText: 'plex', fontNameOwn: '', fontTextOwn: '', nameUpper: true, nameWeight: 500, textWeight: 400, outline: 0.6,
@@ -22,7 +22,7 @@
     bots: 'streamelements, nightbot, moobot, streamlabs, soundalerts, sery_bot, wizebot, fossabot, commanderroot',
     ignore: '',
     // Highlights
-    mentions: 'fndr7x', hlWords: '', hlFirst: true, hlMods: true, hlEvents: true, hlPoints: true, hlStyle: 'ring',
+    mentions: '', hlWords: '', hlFirst: true, hlMods: true, hlEvents: true, hlPoints: true, hlStyle: 'ring',
     // Viewers with their own colour and mark: [{ login, color, mark }]
     people: [],
     // Emotes
@@ -58,7 +58,7 @@
 
   // ---------- language ----------
   // Keys are the Ukrainian strings; i18n.js holds the other languages. "{name}" in a string is a placeholder.
-  FC.LANGS = [['auto', 'Як у Windows'], ['uk', 'Українська'], ['en', 'English']];
+  FC.LANGS = [['auto', 'Як у Windows'], ['uk', 'Українська'], ['en', 'English'], ['de', 'Deutsch'], ['fr', 'Français'], ['es', 'Español'], ['pt', 'Português'], ['pl', 'Polski'], ['it', 'Italiano'], ['tr', 'Türkçe']];
   FC.lang = () => {
     const l = FC.s.lang;
     if (l && l !== 'auto') return l;
@@ -178,7 +178,7 @@
     }
     m.parts = withEmotes(m.parts || [{ t: m.text || '' }]);
     const low = (m.text || '').toLowerCase();
-    m.mention = m.kind === 'chat' && [...list(s.mentions), ...list(s.hlWords)].some((w) => w && low.includes(w));
+    m.mention = m.kind === 'chat' && [...(list(s.mentions).length ? list(s.mentions) : list(s.twitch)), ...list(s.hlWords)].some((w) => w && low.includes(w));
     m.own = !!m.own;
     subs.forEach((f) => f(m));
   };

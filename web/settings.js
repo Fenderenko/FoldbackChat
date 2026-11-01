@@ -98,7 +98,7 @@
 
   const twSt = el('<span class="pill"><i></i><span></span></span>'), ytSt = el('<span class="pill"><i></i><span></span></span>');
   page('channels', 'Канали', [
-    row('Twitch', 'нік каналу; чат читається як гість, без пароля', [check('twitchOn'), text('twitch', 'fndr7x'), twSt]),
+    row('Twitch', 'нік каналу; чат читається як гість, без пароля', [check('twitchOn'), text('twitch', t('нік')), twSt]),
     row('YouTube', '@нік каналу, посилання на трансляцію або ID відео; ефір шукається сам раз на хвилину', [check('ytOn'), text('youtube', '@channel'), ytSt]),
     row('Емоути', 'емоути каналу й загальні з цих сервісів', [labelled(check('e7tv'), '7TV'), labelled(check('eBttv'), 'BTTV'), labelled(check('eFfz'), 'FFZ')]),
     row('Передавати YouTube у сцени OBS', 'сцени показуватимуть і YouTube-чат, поки програма відкрита', check('relay')),
@@ -124,7 +124,7 @@
   ]);
 
   page('highlights', 'Підсвічування', [
-    row('Згадки', 'слова через кому: твій нік, ім’я — повідомлення з ними світяться й мають свій звук', area('mentions')),
+    row('Згадки', 'слова через кому: твій нік, ім’я — повідомлення з ними світяться й мають свій звук; порожньо — нік каналу Twitch', area('mentions')),
     row('Свої слова', 'через кому: будь-які слова, які не хочеш пропустити, — світяться й звучать, як згадки', area('hlWords')),
     row('Новачки', 'перше повідомлення людини на каналі', check('hlFirst')),
     row('Модератори', '', check('hlMods')),
@@ -350,7 +350,7 @@
     row('Тестові повідомлення', 'з’являться в чаті поверх гри; ніки мають і кольори Twitch — видно різницю між режимами кольорів', [
       button('Повідомлення', () => test({ name: 'Lyalka', color: '#FF69B4', text: t('привіт! як полювання?') })),
       button('Новачок', () => test({ name: 'Novachok', color: '#1E90FF', text: t('я тут уперше'), first: true })),
-      button('Згадка', () => test({ name: 'Kozak_77', color: '#9ACD32', text: t('{name}, глянь чат', { name: (s.mentions.split(',')[0] || 'fndr7x').trim() }) })),
+      button('Згадка', () => test({ name: 'Kozak_77', color: '#9ACD32', text: t('{name}, глянь чат', { name: (s.mentions.split(',')[0] || s.twitch || 'Foldback').trim() }) })),
       button('YouTube', () => test({ platform: 'yt', name: 'dzyga', text: t('дивлюсь з ютуба') })),
       button('Підписка', () => test({ kind: 'sub', name: 'huntress_ua', color: '#DAA520', text: t('тримай!'), amount: t('підписка · {n} міс.', { n: 7 }) })),
       button('Суперчат', () => test({ platform: 'yt', kind: 'superchat', name: 'Vovk', text: t('на патрони'), amount: '100 ₴' })),

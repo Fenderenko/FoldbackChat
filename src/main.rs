@@ -90,23 +90,70 @@ struct App {
     icon: HICON,
 }
 
-/// Host texts in the page language (keys are Ukrainian; a missing translation stays Ukrainian).
+const TR_LANGS: [&str; 8] = ["en", "de", "fr", "es", "pt", "pl", "it", "tr"];
+/// Host texts: Ukrainian key, then the languages of TR_LANGS in order.
+const TR: [(&str, [&str; 8]); 9] = [
+    ("Налаштування", ["Settings", "Einstellungen", "Paramètres", "Ajustes", "Configurações", "Ustawienia", "Impostazioni", "Ayarlar"]),
+    ("Показувати чат", ["Show chat", "Chat anzeigen", "Afficher le chat", "Mostrar el chat", "Mostrar o chat", "Pokazuj czat", "Mostra la chat", "Sohbeti göster"]),
+    (
+        "Закріпити (клацання крізь чат)",
+        ["Lock (clicks go through)", "Fixieren (Klicks gehen durch)", "Verrouiller (les clics passent)", "Fijar (los clics pasan)", "Fixar (os cliques passam)", "Zablokuj (kliknięcia przechodzą)", "Blocca (i clic passano)", "Sabitle (tıklamalar geçer)"],
+    ),
+    (
+        "Повернути вікно на місце",
+        ["Reset window position", "Fensterposition zurücksetzen", "Remettre la fenêtre en place", "Restablecer la posición de la ventana", "Redefinir a posição da janela", "Przywróć położenie okna", "Ripristina la posizione della finestra", "Pencereyi yerine getir"],
+    ),
+    ("Вихід", ["Exit", "Beenden", "Quitter", "Salir", "Sair", "Wyjdź", "Esci", "Çıkış"]),
+    (
+        "Foldback Chat — налаштування",
+        ["Foldback Chat — settings", "Foldback Chat — Einstellungen", "Foldback Chat — paramètres", "Foldback Chat — ajustes", "Foldback Chat — configurações", "Foldback Chat — ustawienia", "Foldback Chat — impostazioni", "Foldback Chat — ayarlar"],
+    ),
+    (
+        "Порт 8792 зайнятий: Foldback Chat не може запуститися.",
+        [
+            "Port 8792 is busy: Foldback Chat can't start.",
+            "Port 8792 ist belegt: Foldback Chat kann nicht starten.",
+            "Le port 8792 est occupé : Foldback Chat ne peut pas démarrer.",
+            "El puerto 8792 está ocupado: Foldback Chat no puede iniciarse.",
+            "A porta 8792 está ocupada: o Foldback Chat não pode iniciar.",
+            "Port 8792 jest zajęty: Foldback Chat nie może się uruchomić.",
+            "La porta 8792 è occupata: Foldback Chat non può avviarsi.",
+            "8792 numaralı bağlantı noktası meşgul: Foldback Chat başlatılamıyor.",
+        ],
+    ),
+    (
+        "Не вдалося створити вікно чату (WebView2).",
+        [
+            "Couldn't create the chat window (WebView2).",
+            "Das Chatfenster konnte nicht erstellt werden (WebView2).",
+            "Impossible de créer la fenêtre du chat (WebView2).",
+            "No se pudo crear la ventana del chat (WebView2).",
+            "Não foi possível criar a janela do chat (WebView2).",
+            "Nie udało się utworzyć okna czatu (WebView2).",
+            "Impossibile creare la finestra della chat (WebView2).",
+            "Sohbet penceresi oluşturulamadı (WebView2).",
+        ],
+    ),
+    (
+        "Потрібен Microsoft Edge WebView2 Runtime.",
+        [
+            "Microsoft Edge WebView2 Runtime is required.",
+            "Microsoft Edge WebView2 Runtime wird benötigt.",
+            "Microsoft Edge WebView2 Runtime est nécessaire.",
+            "Se necesita Microsoft Edge WebView2 Runtime.",
+            "É necessário o Microsoft Edge WebView2 Runtime.",
+            "Wymagany jest Microsoft Edge WebView2 Runtime.",
+            "È necessario Microsoft Edge WebView2 Runtime.",
+            "Microsoft Edge WebView2 Runtime gerekli.",
+        ],
+    ),
+];
+
+/// Host texts in the page language (a missing language or key stays Ukrainian).
 fn tr(uk: &'static str) -> &'static str {
-    if app(|a| a.lang != "en") {
-        return uk;
-    }
-    match uk {
-        "Налаштування" => "Settings",
-        "Показувати чат" => "Show chat",
-        "Закріпити (клацання крізь чат)" => "Lock (clicks go through)",
-        "Повернути вікно на місце" => "Reset window position",
-        "Вихід" => "Exit",
-        "Foldback Chat — налаштування" => "Foldback Chat — settings",
-        "Порт 8792 зайнятий: Foldback Chat не може запуститися." => "Port 8792 is busy: Foldback Chat can't start.",
-        "Не вдалося створити вікно чату (WebView2)." => "Couldn't create the chat window (WebView2).",
-        "Потрібен Microsoft Edge WebView2 Runtime." => "Microsoft Edge WebView2 Runtime is required.",
-        _ => uk,
-    }
+    let lang = app(|a| a.lang.clone());
+    let Some(i) = TR_LANGS.iter().position(|l| *l == lang) else { return uk };
+    TR.iter().find(|(k, _)| *k == uk).map_or(uk, |(_, v)| v[i])
 }
 
 const REPO: &str = "https://github.com/Fenderenko/FoldbackChat";
