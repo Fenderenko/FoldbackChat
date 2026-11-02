@@ -1,40 +1,51 @@
 # Foldback Chat
 
-Чат Twitch і YouTube в одному вікні поверх гри. Бачиш його лише ти: OBS захоплює саму гру, сторонні вікна в стрім не потрапляють
-(гра має бути у вікні без рамок, не в повноекранному режимі).
+[Українською](README.uk.md)
 
-## Запуск
-`FoldbackChat.exe` — значок з'явиться в треї. Клік по значку — показати / сховати чат, правий клік — меню.
+Twitch and YouTube chat in one window over your game. Only you see it: OBS captures the game itself, other windows
+never get into the stream (the game has to run in a borderless window, not in exclusive fullscreen).
 
-## Клавіші (міняються в налаштуваннях)
-- **Alt+Shift+C** — показати / сховати чат
-- **Alt+Shift+X** — закріпити / відкріпити. Відкріплений чат можна тягнути, міняти розмір за краї й гортати історію коліщатком;
-  закріплений пропускає клацання в гру.
-- **Alt+Shift+S** — налаштування
+## Download
+[Releases](https://github.com/Fenderenko/FoldbackChat/releases/latest): `FoldbackChat-<version>.zip` (the app, license,
+this file) or the bare `FoldbackChat-<version>.exe`. No installer: run the exe. Windows 10 / 11 with Microsoft Edge
+WebView2 Runtime (already part of Windows 11).
 
-## Що вміє
-- Twitch (як гість, без пароля) і YouTube (без ключів; ефір шукається сам)
-- емоути Twitch, 7TV, BTTV, FFZ і емодзі YouTube
-- підсвічування згадок, своїх слів, новачків, модераторів, підписок, рейдів, бітів, суперчатів, повідомлень за бали каналу
-- відповіді (кому й на що), свої кольори й позначки для глядачів
-- звуки на кожен тип події: вбудовані або свій файл, гучність, пауза між звуками
-- вигляд: картки або рядки, шрифти, розмір тексту, прозорість, кольори, кількість і зникання повідомлень
-- фільтри: боти, команди, посилання, ігнор
-- верхній рядок: стан каналів, глядачі, скільки йде стрім, годинник
-- окреме місце чату для кожної гри на весь екран; режим «Разом з OBS»
-- палітри кольорів ніків (готові, свої, згенеровані)
-- мови: українська, англійська, німецька, французька, іспанська, португальська, польська, італійська, турецька
-- передає YouTube-чат у сцени OBS (SSE http://127.0.0.1:8792/events), поки програма відкрита
+## Start
+Run `FoldbackChat.exe` — an icon appears in the tray. Click it to show / hide the chat, right-click for the menu.
 
-Налаштування зберігаються в `%LOCALAPPDATA%\Foldback Chat`, положення вікна, клавіші й місця для ігор — в `%APPDATA%\Foldback Chat`.
-Колишні теки FndrChat переносяться туди самі при першому запуску.
+## Hotkeys (change them in the settings)
+- **Alt+Shift+C** — show / hide the chat
+- **Alt+Shift+X** — lock / unlock. An unlocked chat can be dragged, resized by its edges and scrolled back with the
+  mouse wheel; a locked one lets clicks through to the game.
+- **Alt+Shift+S** — settings
 
-## Збірка
+## Features
+- Twitch (as a guest, no password) and YouTube (no keys; the live stream is found by itself)
+- Twitch, 7TV, BTTV, FFZ emotes and YouTube emoji
+- highlights for mentions, your own words, first-timers, moderators, subs, raids, bits, Super Chats, channel points
+- replies (who and what), own colours and marks for viewers
+- a sound for every kind of event: built-in or your own file, volume, a pause between sounds
+- look: cards or lines, fonts (any font installed in Windows), text size, transparency, colours, how many messages
+  and when they fade
+- name colour palettes: ready-made, your own, generated
+- filters: bots, commands, links, ignored people
+- top line: channel status, viewers, stream time, clock — size, colour and backing adjustable
+- a separate chat position for every fullscreen game; "With OBS" mode — the chat shows while OBS runs
+- languages: English, Ukrainian, German, French, Spanish, Portuguese, Polish, Italian, Turkish
+- sends the YouTube chat to OBS browser sources (SSE `http://127.0.0.1:8792/events`) while the app is open
+
+Settings are kept in `%LOCALAPPDATA%\Foldback Chat`; the window position, hotkeys and per-game positions in
+`%APPDATA%\Foldback Chat`.
+
+## Build
+Rust (MSVC), the app itself: `src/` (Rust) and `web/` (the chat and settings pages, HTML / CSS / JavaScript).
 ```
-python tools\mkicon.py          # лише якщо змінилася іконка
-cargo build --release --offline
+cargo build --release
 copy target\release\FoldbackChat.exe FoldbackChat.exe
 ```
+Python is needed only for the helper scripts in `tools/`: `mkicon.py` draws the icons (`assets/`), `i18n_src.py` holds
+the translations and generates `web/i18n.js`, `check_i18n.py` checks them. Their results are in the repository, so the
+build doesn't need Python.
 
-## Ліцензія
-GPL-3.0 — див. [LICENSE](LICENSE).
+## License
+GPL-3.0 — see [LICENSE](LICENSE).

@@ -1,0 +1,3 @@
+# GitHub language bar: the helper scripts and the generated translations are not the app's code.
+tools/** linguist-vendored
+web/i18n.js linguist-generated

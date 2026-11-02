@@ -1,0 +1,59 @@
+# Every push: the build without warnings and the translations check.
+# A tag v*: the release build is packed into FoldbackChat-<version>.zip (the exe, LICENSE, README) plus the bare
+# FoldbackChat-<version>.exe and published as a release right away (the app's update check sees published releases only).
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build without warnings
+        run: cargo build
+        env:
+          RUSTFLAGS: -D warnings
+
+      - name: Translations
+        run: python tools/check_i18n.py
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: Release build
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: cargo build --release
+
+      # The tag must name the version in Cargo.toml: the app compares it with the release.
+      - name: Pack
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $v = '${{ github.ref_name }}'.TrimStart('v')
+          $cv = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if ($cv -ne $v) { throw "tag $v, Cargo.toml $cv" }
+          New-Item -ItemType Directory pack | Out-Null
+          Copy-Item target/release/FoldbackChat.exe, LICENSE, README.md pack/
+          Compress-Archive -Path pack/* -DestinationPath "FoldbackChat-$v.zip"
+          Copy-Item target/release/FoldbackChat.exe "FoldbackChat-$v.exe"
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            FoldbackChat-*.zip
+            FoldbackChat-*.exe
+          draft: false
