@@ -1,6 +1,7 @@
 //! Local HTTP server on 127.0.0.1 (plain std, one thread per connection) and a small WinHTTP client.
-//! Routes: the pages (embedded in release, read from web/ in debug), /events (SSE fan-out of /push,
-//! used by the OBS scenes), /proxy (YouTube requests with a consent cookie), /cmd and /state (host).
+//! Routes: the pages (embedded in release, read from web/ in debug; /obs — the chat as an OBS browser source),
+//! /events (SSE fan-out of /push, used by the OBS scenes and the /obs page), /store (settings and sound files),
+//! /proxy (YouTube requests with a consent cookie), /cmd and /state (host).
 
 use std::{
     ffi::c_void,
@@ -100,15 +101,22 @@ fn handle(mut s: TcpStream) -> std::io::Result<()> {
     let mut it = line.split_whitespace();
     let (method, target) = (it.next().unwrap_or("").to_string(), it.next().unwrap_or("/").to_string());
     let mut len = 0usize;
+    let mut origin = String::new();
     loop {
         let mut h = String::new();
         if r.read_line(&mut h)? == 0 || h == "\r\n" || h == "\n" {
             break;
         }
         if let Some((k, v)) = h.split_once(':')
+            && k.eq_ignore_ascii_case("origin")
+        {
+            origin = v.trim().to_string();
+        }
+        if let Some((k, v)) = h.split_once(':')
             && k.eq_ignore_ascii_case("content-length")
         {
-            len = v.trim().parse().unwrap_or(0).min(1 << 20);
+            // Sound files (data URLs) go to /store: up to 1.5 MB as a file, about 2 MB as text.
+            len = v.trim().parse().unwrap_or(0).min(4 << 20);
         }
     }
     let mut body = vec![0u8; len];
@@ -119,8 +127,28 @@ fn handle(mut s: TcpStream) -> std::io::Result<()> {
         return respond(&mut s, "204 No Content", "text/plain", b"");
     }
     match path {
-        "/" | "/overlay" => serve(&mut s, "overlay.html"),
+        "/" | "/overlay" | "/obs" => serve(&mut s, "overlay.html"),
         "/settings" => serve(&mut s, "settings.html"),
+        "/store" => {
+            let Some(file) = param(query, "k").and_then(|k| store_file(&k)) else {
+                return respond(&mut s, "404 Not Found", "text/plain", b"unknown key");
+            };
+            if method == "POST" {
+                // Only the app's own pages may write (a site open in a browser could post here too).
+                if !origin.is_empty() && origin != format!("http://127.0.0.1:{PORT}") {
+                    return respond(&mut s, "403 Forbidden", "text/plain", b"");
+                }
+                // Written aside and renamed: a crash mid-write never leaves half a file.
+                let tmp = file.with_extension("tmp");
+                let ok = std::fs::write(&tmp, &body).and_then(|_| std::fs::rename(&tmp, &file)).is_ok();
+                if ok && file.file_name().is_some_and(|n| n == "settings.json") {
+                    broadcast_raw(b"event: settings\ndata: {}\n\n");
+                }
+                return respond(&mut s, if ok { "204 No Content" } else { "500 Internal Server Error" }, "text/plain", b"");
+            }
+            let b = std::fs::read(&file).unwrap_or_default();
+            respond(&mut s, "200 OK", "text/plain; charset=utf-8", &b)
+        }
         "/events" => {
             s.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-store\r\nAccess-Control-Allow-Origin: *\r\nConnection: keep-alive\r\n\r\n: hi\n\n")?;
             s.flush()?;
@@ -128,9 +156,11 @@ fn handle(mut s: TcpStream) -> std::io::Result<()> {
             Ok(())
         }
         "/push" => {
-            // One JSON object per call; SSE data lines must not contain newlines.
+            // One JSON object per call; SSE data lines must not contain newlines. "?e=test" sends a named event
+            // (test messages for the /obs page); the OBS scenes listen to unnamed ones only.
             let text = String::from_utf8_lossy(&body).replace(['\r', '\n'], " ");
-            broadcast_raw(format!("data: {text}\n\n").as_bytes());
+            let event = if param(query, "e").as_deref() == Some("test") { "event: test\n" } else { "" };
+            broadcast_raw(format!("{event}data: {text}\n\n").as_bytes());
             respond(&mut s, "204 No Content", "text/plain", b"")
         }
         "/state" => {
@@ -161,6 +191,16 @@ fn serve(s: &mut TcpStream, name: &str) -> std::io::Result<()> {
         Some((b, ct)) => respond(s, "200 OK", ct, &b),
         None => respond(s, "404 Not Found", "text/plain", b"not found"),
     }
+}
+
+/// Files behind /store, in the app data folder: the settings, and own sounds (data URLs) per event.
+fn store_file(key: &str) -> Option<std::path::PathBuf> {
+    let name = match key {
+        "settings" => "settings.json".to_string(),
+        "snd.msg" | "snd.first" | "snd.mention" | "snd.event" => format!("sound-{}.txt", &key[4..]),
+        _ => return None,
+    };
+    Some(crate::data_dir().join(name))
 }
 
 /// A query parameter, percent-decoded.

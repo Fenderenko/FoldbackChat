@@ -18,7 +18,8 @@
     showHeader: true, hdrTw: true, hdrYt: true, hdrViewers: true, hdrUptime: true, hdrClock: false,
     hdrSize: 13, hdrColor: '#e6e6e6', hdrT: 0.45,
     // Messages
-    maxMsgs: 12, fade: 0, newestTop: false, hideBots: true, hideCommands: false, hideLinks: false, showReplies: true,
+    // idleHide: the whole chat hides after that many quiet seconds and comes back with a new message (0 — never)
+    maxMsgs: 12, fade: 0, idleHide: 0, newestTop: false, hideBots: true, hideCommands: false, hideLinks: false, showReplies: true,
     bots: 'streamelements, nightbot, moobot, streamlabs, soundalerts, sery_bot, wizebot, fossabot, commanderroot',
     ignore: '',
     // Highlights
@@ -47,11 +48,54 @@
     }
     return { ...FC.DEF, ...s, snd: { ...FC.DEF.snd, ...(s.snd || {}) }, vol: { ...FC.DEF.vol, ...(s.vol || {}) } };
   };
-  FC.save = (s) => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* full */ } };
   FC.s = FC.load();
   const changeSubs = [];
   FC.onChange = (f) => changeSubs.push(f);
   addEventListener('storage', (e) => { if (e.key === KEY || (e.key || '').startsWith('fc.snd.')) { FC.s = FC.load(); changeSubs.forEach((f) => f()); } });
+
+  // The host keeps the settings and own sounds in files (/store), and the file wins: WebView2 may reset its storage,
+  // and the OBS browser source has a storage of its own. localStorage stays as the fast copy the pages read.
+  // store(k) → the file's text ('' — no file), null — the host can't be reached.
+  FC.store = (k, v) => fetch('/store?k=' + k, v == null ? {} : { method: 'POST', body: v }).then((r) => (r.ok ? r.text() : null)).catch(() => null);
+  // Writes go one at a time and only the newest waiting one is sent; FC.flush() resolves when the file is current.
+  let pending = null, writing = null;
+  FC.flush = () => writing || (pending == null ? Promise.resolve() : (writing = (async () => {
+    while (pending != null) { const v = pending; pending = null; await FC.store('settings', v); }
+    writing = null;
+  })()));
+  FC.save = (s) => {
+    const v = JSON.stringify(s);
+    try { localStorage.setItem(KEY, v); } catch { /* full */ }
+    pending = v;
+    FC.flush();
+  };
+  addEventListener('pagehide', () => { if (pending != null) navigator.sendBeacon('/store?k=settings', pending); });
+  const local = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+  const keep = (k, v) => { try { localStorage.setItem(k, v); } catch { /* full */ } };
+  // Takes the settings file into the page; true when they changed (subscribers are told).
+  FC.pull = async () => {
+    const file = await FC.store('settings');
+    if (file == null || !file.trim() || file === local(KEY)) return false;
+    keep(KEY, file);
+    FC.s = FC.load();
+    changeSubs.forEach((f) => f());
+    return true;
+  };
+  // On load: the files win; settings and sounds that exist only in the page storage (before 0.1.2) go to the files.
+  // Resolves to false when there is no host (the pages opened from web/ for a check).
+  FC.SND_EVENTS = ['msg', 'first', 'mention', 'event'];
+  FC.ready = (async () => {
+    const file = await FC.store('settings');
+    if (file == null) return false;
+    if (file.trim()) await FC.pull();
+    else if (local(KEY)) { pending = local(KEY); FC.flush(); }
+    for (const ev of FC.SND_EVENTS) {
+      const k = 'fc.snd.' + ev, f = await FC.store('snd.' + ev), l = local(k);
+      if (f && f !== l) keep(k, f);
+      else if (!f && l) FC.store('snd.' + ev, l);
+    }
+    return true;
+  })();
 
   FC.host = (c, v, extra = '') => fetch(`/cmd?c=${encodeURIComponent(c)}${v != null ? '&v=' + encodeURIComponent(v) : ''}${extra}`).catch(() => {});
   FC.state = () => fetch('/state').then((r) => r.json()).catch(() => ({}));
@@ -211,20 +255,27 @@
     try { localStorage.setItem('fc.status.' + k, v + '|' + note); } catch { /* storage unavailable */ }
     statusSubs.forEach((f) => f());
   };
+  // A platform's state in words, as the settings page and the tray tip show it.
+  FC.statusText = (v, note) => FC.t({ live: 'на зв’язку', wait: note || 'зачекай', error: note || 'помилка', off: 'вимкнено' }[v] || '');
 
   let tw = null;
   FC.twitch = (channel) => {
     if (tw) { tw.close(); tw = null; }
     channel = String(channel || '').toLowerCase().replace(/^#|^@/, '').trim();
     if (!channel || !FC.s.twitchOn) { setStatus('tw', 'off'); return; }
-    let ws, backoff = 1000, alive = Date.now(), dead = false, timer;
+    let ws, backoff = 1000, alive = Date.now(), dead = false, timer, joined;
     const own = channel;
     const connect = () => {
       setStatus('tw', 'wait');
       ws = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
-      ws.onopen = () => { backoff = 1000; ws.send('CAP REQ :twitch.tv/tags twitch.tv/commands'); ws.send('PASS SCHMOOPIIE'); ws.send('NICK justinfan' + (10000 + Math.floor(Math.random() * 80000))); ws.send('JOIN #' + channel); };
+      ws.onopen = () => {
+        backoff = 1000; ws.send('CAP REQ :twitch.tv/tags twitch.tv/commands'); ws.send('PASS SCHMOOPIIE'); ws.send('NICK justinfan' + (10000 + Math.floor(Math.random() * 80000))); ws.send('JOIN #' + channel);
+        // Twitch stays silent on a channel that doesn't exist (or is banned): no ROOMSTATE comes.
+        clearTimeout(joined);
+        joined = setTimeout(() => { if (FC.status.tw !== 'live') setStatus('tw', 'error', 'канал не знайдено'); }, 10e3);
+      };
       ws.onmessage = (e) => { alive = Date.now(); for (const l of String(e.data).split('\r\n')) if (l) handle(parse(l)); };
-      ws.onclose = () => { if (dead) return; setStatus('tw', 'wait', 'перепідключення'); timer = setTimeout(connect, backoff); backoff = Math.min(backoff * 2, 30000); };
+      ws.onclose = () => { clearTimeout(joined); if (dead) return; setStatus('tw', 'wait', 'перепідключення'); timer = setTimeout(connect, backoff); backoff = Math.min(backoff * 2, 30000); };
       ws.onerror = () => ws.close();
     };
     const user = (m) => { const login = m.tags.login || m.prefix.split('!')[0] || ''; return { login, name: m.tags['display-name'] || login, color: m.tags.color || '' }; };
@@ -274,7 +325,7 @@
     };
     const watch = setInterval(() => { if (ws && ws.readyState === 1 && Date.now() - alive > 6 * 60e3) ws.close(); }, 30e3);
     connect();
-    tw = { close: () => { dead = true; clearTimeout(timer); clearInterval(watch); try { ws.close(); } catch { /* closed */ } setStatus('tw', 'off'); } };
+    tw = { close: () => { dead = true; clearTimeout(timer); clearTimeout(joined); clearInterval(watch); try { ws.close(); } catch { /* closed */ } setStatus('tw', 'off'); } };
   };
 
   // ---------- YouTube (live chat without keys, through the host proxy) ----------
@@ -303,7 +354,9 @@
     async function find() {
       setStatus('yt', 'wait', 'шукаю ефір');
       try {
-        const html = await proxy(live);
+        const res = await fetch('/proxy?u=' + encodeURIComponent(live));
+        if (res.status === 404) { setStatus('yt', 'error', 'канал не знайдено'); return later(300e3, find); }
+        const html = await res.text();
         const vid = (html.match(/<link rel="canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([\w-]{11})"/) || [])[1];
         const key = (html.match(/"INNERTUBE_API_KEY":"([^"]+)"/) || [])[1];
         const ver = (html.match(/"clientVersion":"([\d.]+)"/) || [])[1] || '2.20241101.00.00';

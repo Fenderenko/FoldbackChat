@@ -2,7 +2,8 @@
 //! Foldback Chat: Twitch + YouTube chat in a transparent always-on-top window over the game, plus a
 //! settings window. The overlay uses WebView2 visual hosting (DirectComposition) so its background is
 //! truly transparent; "locked" makes the window click-through. OBS never sees it: the game capture
-//! takes only the game. The pages talk to this host over the local HTTP server (net.rs).
+//! takes only the game. For the stream itself the same chat is an OBS browser source (/obs).
+//! The pages talk to this host over the local HTTP server (net.rs).
 
 mod net;
 
@@ -26,7 +27,10 @@ use windows::{
         Graphics::{
             DirectComposition::{DCompositionCreateDevice2, IDCompositionDesktopDevice, IDCompositionTarget, IDCompositionVisual2},
             Dwm::{DWMWA_BORDER_COLOR, DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR, DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute},
-            Gdi::{BeginPaint, CreateSolidBrush, DeleteObject, EndPaint, FillRect, FrameRect, GetMonitorInfoW, HGDIOBJ, InvalidateRect, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow, PAINTSTRUCT},
+            Gdi::{
+                BeginPaint, CreateSolidBrush, DeleteObject, EndPaint, EnumDisplayMonitors, FillRect, FrameRect, GetMonitorInfoW, HDC, HGDIOBJ, HMONITOR, InvalidateRect, MONITOR_DEFAULTTONEAREST, MONITORINFO,
+                MonitorFromWindow, PAINTSTRUCT,
+            },
         },
         System::{
             Com::{COINIT_APARTMENTTHREADED, CoInitializeEx},
@@ -88,6 +92,8 @@ struct App {
     hk_busy: [bool; 3],
     taskbar_msg: u32,
     icon: HICON,
+    /// Tray tip: the app name and the state of each channel, set by the overlay page.
+    tip: String,
 }
 
 const TR_LANGS: [&str; 8] = ["en", "de", "fr", "es", "pt", "pl", "it", "tr"];
@@ -551,8 +557,13 @@ fn update_state() {
     let (locked, shown, hk, per_game, game, games, obs_only, busy) = app(|a| (a.locked, a.shown, a.hk.clone(), a.per_game, a.game.clone(), a.games.iter().map(|g| g.0.clone()).collect::<Vec<_>>(), a.obs_only, a.hk_busy));
     let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
     let games = games.iter().map(|g| format!("\"{}\"", esc(g))).collect::<Vec<_>>().join(",");
+    let mons = monitors();
+    let ov = app(|a| a.ov);
+    let here = unsafe { MonitorFromWindow(ov, MONITOR_DEFAULTTONEAREST) };
+    let monitor = mons.iter().position(|m| m.0 == here).map_or(-1, |i| i as i64);
+    let mons = mons.iter().map(|(_, r, p)| format!("{{\"w\":{},\"h\":{},\"primary\":{p}}}", r.right - r.left, r.bottom - r.top)).collect::<Vec<_>>().join(",");
     let json = format!(
-        "{{\"locked\":{locked},\"shown\":{shown},\"autostart\":{},\"hk\":[\"{}\",\"{}\",\"{}\"],\"hkbusy\":[{},{},{}],\"pergame\":{per_game},\"game\":\"{}\",\"games\":[{games}],\"obsonly\":{obs_only},\"version\":\"{}\",\"port\":{}}}",
+        "{{\"locked\":{locked},\"shown\":{shown},\"autostart\":{},\"hk\":[\"{}\",\"{}\",\"{}\"],\"hkbusy\":[{},{},{}],\"pergame\":{per_game},\"game\":\"{}\",\"games\":[{games}],\"obsonly\":{obs_only},\"monitors\":[{mons}],\"monitor\":{monitor},\"version\":\"{}\",\"port\":{}}}",
         autostart(),
         esc(&hk[0]),
         esc(&hk[1]),
@@ -609,9 +620,11 @@ fn tray(add: bool) {
 }
 
 fn tray_msg(op: NOTIFY_ICON_MESSAGE) {
-    let (main, icon) = app(|a| (a.main, a.icon));
+    let (main, icon, tip) = app(|a| (a.main, a.icon, a.tip.clone()));
     let mut nid = NOTIFYICONDATAW { cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32, hWnd: main, uID: 1, uFlags: NIF_MESSAGE | NIF_ICON | NIF_TIP, uCallbackMessage: WM_TRAY, hIcon: icon, ..Default::default() };
-    for (i, c) in "Foldback Chat".encode_utf16().enumerate() {
+    let tip = if tip.is_empty() { "Foldback Chat".to_string() } else { tip };
+    // szTip holds 128 UTF-16 units with the closing zero.
+    for (i, c) in tip.encode_utf16().take(nid.szTip.len() - 1).enumerate() {
         nid.szTip[i] = c;
     }
     unsafe {
@@ -698,6 +711,15 @@ fn command(q: &str) {
     };
     match net::param(q, "c").as_deref() {
         Some("settings") => open_settings(),
+        Some("tip") => {
+            app(|a| a.tip = v.chars().take(127).collect());
+            tray_msg(NIM_MODIFY);
+        }
+        Some("monitor") => {
+            if let Ok(i) = v.parse::<usize>() {
+                to_monitor(i);
+            }
+        }
         Some("lock") => set_locked(flag(app(|a| a.locked))),
         Some("show") => set_shown(flag(app(|a| a.shown))),
         Some("resetpos") => reset_position(),
@@ -1027,6 +1049,29 @@ fn open_settings() {
     }
 }
 
+/// Hidden, not destroyed: opens instantly next time.
+fn hide_settings() {
+    let (hwnd, ctl) = app(|a| (a.set, a.set_ctl.clone()));
+    unsafe {
+        let _ = ShowWindow(hwnd, SW_HIDE);
+        if let Some(c) = ctl {
+            let _ = c.SetIsVisible(false);
+        }
+    }
+}
+
+/// The settings key: closes the settings when they are in front, otherwise opens them or brings them forward.
+fn toggle_settings() {
+    let hwnd = app(|a| a.set);
+    unsafe {
+        if !hwnd.is_invalid() && IsWindowVisible(hwnd).as_bool() && !IsIconic(hwnd).as_bool() && GetForegroundWindow() == hwnd {
+            hide_settings();
+        } else {
+            open_settings();
+        }
+    }
+}
+
 // ---------- window procedures ----------
 
 extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
@@ -1047,7 +1092,7 @@ extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LR
                 match wp.0 {
                     1 => set_shown(!app(|a| a.shown)),
                     2 => set_locked(!app(|a| a.locked)),
-                    3 => open_settings(),
+                    3 => toggle_settings(),
                     _ => {}
                 }
                 LRESULT(0)
@@ -1246,11 +1291,7 @@ extern "system" fn settings_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -
                 LRESULT(0)
             }
             WM_CLOSE => {
-                // Hidden, not destroyed: opens instantly next time.
-                let _ = ShowWindow(hwnd, SW_HIDE);
-                if let Some(c) = app(|a| a.set_ctl.clone()) {
-                    let _ = c.SetIsVisible(false);
-                }
+                hide_settings();
                 LRESULT(0)
             }
             WM_GETMINMAXINFO => {
@@ -1261,6 +1302,45 @@ extern "system" fn settings_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -
             _ => DefWindowProcW(hwnd, msg, wp, lp),
         }
     }
+}
+
+/// Monitors in Windows order: handle, whole rect, primary.
+fn monitors() -> Vec<(HMONITOR, RECT, bool)> {
+    unsafe extern "system" fn each(m: HMONITOR, _: HDC, _: *mut RECT, lp: LPARAM) -> windows::core::BOOL {
+        let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+        unsafe {
+            if GetMonitorInfoW(m, &mut mi).as_bool() {
+                (*(lp.0 as *mut Vec<(HMONITOR, RECT, bool)>)).push((m, mi.rcMonitor, mi.dwFlags & MONITORINFOF_PRIMARY != 0));
+            }
+        }
+        true.into()
+    }
+    let mut v: Vec<(HMONITOR, RECT, bool)> = Vec::new();
+    unsafe {
+        let _ = EnumDisplayMonitors(None, None, Some(each), LPARAM(&mut v as *mut _ as isize));
+    }
+    v
+}
+
+/// Moves the chat to monitor `i`, at the same place relative to the monitor; the size stays, clamped to fit.
+fn to_monitor(i: usize) {
+    let Some(&(_, to, _)) = monitors().get(i) else { return };
+    let hwnd = app(|a| a.ov);
+    let mut r = RECT::default();
+    unsafe {
+        let _ = GetWindowRect(hwnd, &mut r);
+    }
+    let from = monitor_rect(hwnd);
+    let (w, h) = ((r.right - r.left).min(to.right - to.left), (r.bottom - r.top).min(to.bottom - to.top));
+    let place = |pos: i32, lo: i32, span: i32, to_lo: i32, to_span: i32, size: i32| {
+        let f = if span > size { (pos - lo) as f64 / (span - size) as f64 } else { 0.0 };
+        to_lo + (f.clamp(0.0, 1.0) * (to_span - size) as f64).round() as i32
+    };
+    let left = place(r.left, from.left, from.right - from.left, to.left, to.right - to.left, w);
+    let top = place(r.top, from.top, from.bottom - from.top, to.top, to.bottom - to.top, h);
+    move_overlay(RECT { left, top, right: left + w, bottom: top + h });
+    store_rect();
+    update_state();
 }
 
 fn monitor_rect(hwnd: HWND) -> RECT {

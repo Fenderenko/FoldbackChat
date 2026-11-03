@@ -1,12 +1,16 @@
 // Settings page: pages grouped in the left menu (chat / look / app), one page at a time. Every change is saved at
-// once; the overlay picks it up through the storage event. Texts go through FC.t (the keys are Ukrainian).
-(() => {
+// once (page storage + the host's file); the overlay picks it up through the storage event. Texts go through FC.t
+// (the keys are Ukrainian).
+(async () => {
+  await FC.ready;
   const t = FC.t;
   const main = document.getElementById('main'), nav = document.getElementById('nav');
   let s = FC.load();
   // Rows that depend on another setting: greyed out with a note (`when`) or hidden (`showIf`); kept current on every change.
   const deps = [];
   const set = (k, v) => { s[k] = v; FC.save(s); syncDeps(); };
+  // Reload only once the settings file has the last change, or the page would read the older file back.
+  const reload = () => FC.flush().then(() => location.reload());
   const syncDeps = () => deps.forEach(([r, cond, note, hide]) => {
     const on = !!cond();
     if (hide) { r.hidden = !on; return; }
@@ -61,6 +65,7 @@
     keys: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
     general: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
     about: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+    obs: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>',
     test: '<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"/>',
   };
   const icon = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[k] || ''}</svg>`;
@@ -76,7 +81,7 @@
         if (!confirm(t('Скинути «{p}» до типових?', { p: t(title) }))) return;
         for (const k of keys) s[k] = structuredClone(FC.DEF[k]);
         FC.save(s);
-        Promise.resolve(onReset && onReset()).then(() => location.reload());
+        Promise.resolve(onReset && onReset()).then(reload);
       }, 'reset');
       sec_.querySelector('h2').appendChild(b);
     }
@@ -107,13 +112,14 @@
     for (const [p, k] of [[twSt, 'tw'], [ytSt, 'yt']]) {
       const v = (localStorage.getItem('fc.status.' + k) || 'off').split('|');
       p.className = 'pill ' + v[0];
-      p.lastChild.textContent = t({ live: 'на зв’язку', wait: v[1] || 'зачекай', error: v[1] || 'помилка', off: 'вимкнено' }[v[0]] || '');
+      p.lastChild.textContent = FC.statusText(v[0], v[1]);
     }
   }, 1000);
 
   page('messages', 'Повідомлення', [
     row('Скільки показувати', '', range('maxMsgs', 3, 40, 1)),
     row('Зникати через', '0 — не зникають', range('fade', 0, 120, 5, (v) => (v ? sec(v) : t('ніколи')))),
+    row('Ховати чат, коли тихо', 'весь чат з’являється з новим повідомленням і ховається, якщо стільки секунд нових немає; 0 — видно завжди', range('idleHide', 0, 300, 5, (v) => (v ? sec(v) : t('ніколи')))),
     row('Нові зверху', 'інакше нові з’являються знизу', check('newestTop')),
     row('Відповіді', 'над відповіддю — кому відповідають і на що', check('showReplies')),
     row('Ховати ботів', 'список нижче', check('hideBots')),
@@ -166,7 +172,7 @@
       if (!f) return;
       if (f.size > 1.5e6) { alert(t('Файл завеликий: до 1,5 МБ.')); return; }
       const r = new FileReader();
-      r.onload = () => { try { localStorage.setItem('fc.snd.' + ev, r.result); has.textContent = t('файл є'); s.snd[ev] = 'custom'; FC.save(s); } catch { alert(t('Не вдалося зберегти файл.')); } };
+      r.onload = () => { try { localStorage.setItem('fc.snd.' + ev, r.result); FC.store('snd.' + ev, r.result); has.textContent = t('файл є'); s.snd[ev] = 'custom'; FC.save(s); } catch { alert(t('Не вдалося зберегти файл.')); } };
       r.readAsDataURL(f);
     };
     vol.oninput = () => { s.vol[ev] = +vol.value; FC.save(s); };
@@ -267,14 +273,33 @@
   const perGame = el('<input type="checkbox">');
   perGame.onchange = () => FC.host('pergame', perGame.checked ? 1 : 0).then(refresh);
   const games = el('<div class="ctl"></div>');
-  let gamesKey = '';
+  let gamesKey = '', monKey = '';
+  const monSel = el('<select></select>');
+  monSel.onchange = () => FC.host('monitor', monSel.value).then(refresh);
+  const monRow = row('Монітор', 'чат переїде на обраний монітор, на те саме місце', monSel);
   page('window', 'Вікно', [
     row('Закріпити чат', 'закріплений чат пропускає клацання в гру; щоб посунути, змінити розмір чи прогорнути історію коліщатком — відкріпи', lockBtn),
     row('Показ чату', '', showBtn),
     row('Окреме місце для кожної гри', 'у грі на весь екран відкріпи й посунь чат — наступного разу в цій грі він стане туди сам; поза іграми — звичайне місце', perGame),
     row('Запам’ятані ігри', '', games),
+    monRow,
     row('Повернути вікно чату на місце', 'якщо воно загубилося за екраном', button('Повернути', () => FC.host('resetpos'))),
     row('Гра має бути у вікні без рамок', 'у повноекранному режимі гра перекриває будь-які вікна', el('<span class="lab">borderless</span>')),
+  ]);
+
+  // The same chat as an OBS browser source (the /obs page reads the settings file and follows its changes).
+  const obsUrl = `http://127.0.0.1:${location.port || 8792}/obs`;
+  const urlBox = el(`<input type="text" class="url" readonly value="${esc(obsUrl)}">`);
+  urlBox.onclick = () => urlBox.select();
+  const copied = el('<span class="val"></span>');
+  const copy = button('Копіювати', async () => {
+    try { await navigator.clipboard.writeText(obsUrl); } catch { urlBox.select(); document.execCommand('copy'); }
+    copied.textContent = t('скопійовано');
+    setTimeout(() => { copied.textContent = ''; }, 2000);
+  });
+  page('obs', 'OBS', [
+    row('Чат як джерело OBS', 'в OBS: Джерела → + → Браузер, встав цю адресу; ширина й висота — на свій смак, наприклад 420 × 620', [urlBox, copy, copied]),
+    el(`<div class="note">${esc(t('Джерело показує той самий чат: канали, вигляд і зміни налаштувань підхоплює одразу. Звуків і підказок у ньому немає, а програма має бути відкрита. Чат поверх гри працює як і раніше: можна лишити обидва або сховати вікно.'))}</div>`),
   ]);
 
   const hkBtns = [];
@@ -306,7 +331,7 @@
   ], () => FC.host('hkreset'));
 
   const langSel = el(`<select>${FC.LANGS.map(([v, n]) => `<option value="${v}" ${s.lang === v ? 'selected' : ''}>${esc(v === 'auto' ? t(n) : n)}</option>`).join('')}</select>`);
-  langSel.onchange = () => { set('lang', langSel.value); FC.s = s; FC.host('lang', FC.lang()).then(() => location.reload()); };
+  langSel.onchange = () => { set('lang', langSel.value); FC.s = s; FC.host('lang', FC.lang()).then(reload); };
   const autostart = el('<input type="checkbox">');
   autostart.onchange = () => FC.host('autostart', autostart.checked ? 1 : 0).then(refresh);
   const obsOnly = el('<input type="checkbox">');
@@ -315,8 +340,8 @@
   exit.append(
     button('Скинути все', () => {
       if (!confirm(t('Скинути всі налаштування до типових? Канали, кольори, звуки й клавіші стануть як після встановлення.'))) return;
-      try { localStorage.removeItem('fc.settings.v1'); } catch { /* storage unavailable */ }
-      FC.host('hkreset').then(() => location.reload());
+      FC.save({});
+      FC.host('hkreset').then(reload);
     }),
     button('Вийти', () => FC.host('quit'), 'danger'),
   );
@@ -345,9 +370,14 @@
     row('Оновлення', '', [button('Перевірити', checkUpdate), updState]),
   ]);
 
-  const test = (m) => localStorage.setItem('fc.test', JSON.stringify({ ...m, n: Date.now() }));
+  // The overlay window hears the storage event, the OBS source the host's /events.
+  const test = (m) => {
+    const v = JSON.stringify({ ...m, n: Date.now() });
+    localStorage.setItem('fc.test', v);
+    fetch('/push?e=test', { method: 'POST', body: v }).catch(() => {});
+  };
   page('test', 'Перевірка', [
-    row('Тестові повідомлення', 'з’являться в чаті поверх гри; ніки мають і кольори Twitch — видно різницю між режимами кольорів', [
+    row('Тестові повідомлення', 'з’являться в чаті поверх гри й у джерелі OBS; ніки мають і кольори Twitch — видно різницю між режимами кольорів', [
       button('Повідомлення', () => test({ name: 'Lyalka', color: '#FF69B4', text: t('привіт! як полювання?') })),
       button('Новачок', () => test({ name: 'Novachok', color: '#1E90FF', text: t('я тут уперше'), first: true })),
       button('Згадка', () => test({ name: 'Kozak_77', color: '#9ACD32', text: t('{name}, глянь чат', { name: (s.mentions.split(',')[0] || s.twitch || 'Foldback').trim() }) })),
@@ -378,6 +408,19 @@
       hkBtns[i][1].textContent = st.hkbusy?.[i] ? t('зайнято іншою програмою — обери інше') : '';
     });
     perGame.checked = !!st.pergame;
+    const mk = JSON.stringify([st.monitors, st.monitor]);
+    if (mk !== monKey) {
+      monKey = mk;
+      const mons = st.monitors || [];
+      monRow.hidden = mons.length < 2;
+      monSel.replaceChildren(...mons.map((m, i) => {
+        const o = document.createElement('option');
+        o.value = i;
+        o.textContent = t('Монітор {n}', { n: i + 1 }) + ` · ${m.w}×${m.h}` + (m.primary ? ' · ' + t('основний') : '');
+        o.selected = i === st.monitor;
+        return o;
+      }));
+    }
     const key = JSON.stringify([st.games, st.game]);
     if (key !== gamesKey) {
       gamesKey = key;

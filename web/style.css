@@ -36,6 +36,12 @@ body.top #list { justify-content: flex-start; }
 #more { position: absolute; right: 14px; bottom: 12px; z-index: 2; padding: 2px 9px; font: 600 12px/1.6 var(--mono); color: var(--ink); background: var(--tq); border-radius: 10px; pointer-events: none; }
 #more:empty { display: none; }
 body.top #more { bottom: auto; top: 34px; }
+/* "Hide when quiet": the whole chat fades out while locked; unlocked it stays, to be moved. */
+#frame { transition: opacity .6s; }
+body.idle.locked #frame { opacity: 0; }
+/* Before the first message: a plain card that reads even when the message cards are fully transparent. */
+.ph { flex: none; padding: .55em .8em; font: 500 .8em/1.4 var(--mono); letter-spacing: .04em; color: var(--fg); border-radius: var(--radius, 0);
+  background: color-mix(in srgb, var(--cardc, #121212) calc(max(var(--card, .82), .6) * 100%), transparent); text-shadow: 0 1px 2px rgba(0, 0, 0, .8); }
 
 .msg { display: flex; align-items: stretch; flex: none; border-radius: var(--radius, 0); overflow: hidden;
   background: color-mix(in srgb, var(--cardc, #121212) calc(var(--card, .82) * 100%), transparent);
@@ -138,3 +144,4 @@ section h2 .reset { font-size: 12px; padding: 5px 10px; color: var(--dim); }
 .game { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; margin-right: 12px; }
 .hk { min-width: 200px; cursor: pointer; text-align: center; font-family: var(--mono); }
 .hk.rec { border-color: var(--hi); color: var(--hi); }
+input[type=text].url { min-width: 0; width: 280px; font-family: var(--mono); font-size: 12.5px; }

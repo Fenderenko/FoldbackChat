@@ -1,8 +1,12 @@
 // Overlay window: renders the merged chat, plays sounds, relays YouTube to the OBS scenes.
 // Messages are kept in a short history and the list is rebuilt from it on every settings change, so
 // options apply to messages already on screen and a larger "how many" brings hidden ones back.
+// At /obs the same page is an OBS browser source: always locked, silent, no relay; settings and test
+// messages come from the host over /events.
 (() => {
   const list = document.getElementById('list'), head = document.getElementById('head'), hint = document.getElementById('hint'), more = document.getElementById('more');
+  const OBS = location.pathname === '/obs' || new URLSearchParams(location.search).has('obs');
+  document.body.classList.toggle('obs', OBS);
   const ICON = {
     tw: '<svg class="pf" viewBox="0 0 24 24"><path fill="#a970ff" d="M4 3 3 7v12h4v3h3l3-3h4l5-5V3H4Zm16 10-3 3h-4l-3 3v-3H6V5h14v8Z"/><path fill="#a970ff" d="M15 7h2v5h-2zM10 7h2v5h-2z"/></svg>',
     yt: '<svg class="pf" viewBox="0 0 24 24"><rect x="1.5" y="5" width="21" height="14" rx="4" fill="#ff3d3d"/><path fill="#fff" d="m10 9 5.2 3-5.2 3z"/></svg>',
@@ -95,10 +99,24 @@
     return hist.filter((m) => !(s.fade > 0 && now - m.at > s.fade * 1000)).slice(-n);
   }
 
+  // Before the first message: what to do when no channel is set, or that the chat is connected and waiting.
+  // The waiting line stays out of the OBS source, viewers don't need it.
+  function placeholder() {
+    const s = FC.s, hk = host.hk?.[2];
+    let txt = '';
+    if (!(s.twitchOn && s.twitch) && !(s.ytOn && s.youtube)) txt = !OBS && hk && hk !== '-' ? FC.t('Вкажи канал у налаштуваннях ({hk})', { hk }) : FC.t('Вкажи канал у налаштуваннях Foldback Chat');
+    else if (!OBS && (FC.status.tw === 'live' || FC.status.yt === 'live')) txt = FC.t('Підключено · чекаємо на повідомлення');
+    if (!txt) return [];
+    const el = document.createElement('div');
+    el.className = 'ph';
+    el.textContent = txt;
+    return [el];
+  }
+
   function renderAll() {
     const items = visible().map((m) => { const el = build(m); el.style.animation = 'none'; return el; });
     if (FC.s.newestTop) items.reverse();
-    list.replaceChildren(...items);
+    list.replaceChildren(...(hist.length ? items : placeholder()));
     more.textContent = back > 0 ? `${FC.s.newestTop ? '↑' : '↓'} ${back}` : '';
     document.body.classList.toggle('back', back > 0);
   }
@@ -115,6 +133,8 @@
   function add(m) {
     hist.push(m);
     if (hist.length > HIST_MAX) hist = hist.slice(-HIST_MAX);
+    wake();
+    if (hist.length === 1) list.replaceChildren();
     // Looking back: the view stays put, the counter of newer messages grows.
     if (back > 0) { back = Math.min(back + 1, hist.length - 1); more.textContent = `${FC.s.newestTop ? '↑' : '↓'} ${back}`; return; }
     const s = FC.s, el = build(m);
@@ -123,9 +143,17 @@
     if (s.fade > 0) setTimeout(() => { el.classList.add('gone'); setTimeout(() => el.remove(), 900); }, s.fade * 1000);
   }
 
+  // "Hide when quiet": the whole chat shows for idleHide seconds after a message or a settings change.
+  let idleTimer = 0;
+  function wake() {
+    clearTimeout(idleTimer);
+    document.body.classList.remove('idle');
+    if (FC.s.idleHide > 0) idleTimer = setTimeout(() => document.body.classList.add('idle'), FC.s.idleHide * 1000);
+  }
+
   function sound(m) {
     const s = FC.s;
-    if (m.own && s.quietOwn) return;
+    if (OBS || (m.own && s.quietOwn)) return;
     if (m.kind !== 'chat') return FC.play('event');
     if (m.mention) return FC.play('mention');
     if (m.first) return FC.play('first');
@@ -138,7 +166,7 @@
     m.at = Date.now();
     add(m);
     sound(m);
-    if (m.platform === 'yt') FC.relay(m);
+    if (m.platform === 'yt' && !OBS) FC.relay(m);
   });
   FC.onClear = (c) => {
     const hit = (m) => (c.id && m.id === c.id) || (c.login && (m.login || '').toLowerCase() === c.login.toLowerCase()) || (!c.id && !c.login);
@@ -151,8 +179,10 @@
   function drawHead() {
     const s = FC.s;
     const st = (k, label) => `<span class="st ${FC.status[k]}"><i></i>${label}${FC.status[k + 'Note'] && FC.status[k] !== 'live' ? ' · ' + FC.t(FC.status[k + 'Note']) : ''}</span>`;
-    head.innerHTML = (s.hdrTw && s.twitchOn && s.twitch ? st('tw', 'Twitch') : '') + (s.hdrYt && s.ytOn && s.youtube ? st('yt', 'YouTube') : '') + '<span class="sp"></span>' +
-      (s.hdrViewers && viewers ? `<span>${FC.t('{n} глядач.', { n: viewers })}</span>` : '') + (s.hdrUptime && uptime ? `<span>${uptime}</span>` : '') + (s.hdrClock ? `<span>${hhmm(new Date())}</span>` : '');
+    const left = (s.hdrTw && s.twitchOn && s.twitch ? st('tw', 'Twitch') : '') + (s.hdrYt && s.ytOn && s.youtube ? st('yt', 'YouTube') : '');
+    const right = (s.hdrViewers && viewers ? `<span>${FC.t('{n} глядач.', { n: viewers })}</span>` : '') + (s.hdrUptime && uptime ? `<span>${uptime}</span>` : '') + (s.hdrClock ? `<span>${hhmm(new Date())}</span>` : '');
+    // Nothing to show: no line at all (an empty dark strip looked like a broken window).
+    head.innerHTML = left || right ? left + '<span class="sp"></span>' + right : '';
   }
   async function stats() {
     const ch = FC.s.twitch;
@@ -164,28 +194,40 @@
     else { const h = +(u.match(/(\d+) hour/) || [0, 0])[1], mi = +(u.match(/(\d+) minute/) || [0, 0])[1]; uptime = `${h}:${String(mi).padStart(2, '0')}`; }
     drawHead();
   }
-  FC.onStatus(drawHead);
+  // The tray tip names the state of each set channel.
+  let tip = '';
+  const sendTip = () => {
+    const s = FC.s, lines = ['Foldback Chat'];
+    if (s.twitchOn && s.twitch) lines.push('Twitch: ' + FC.statusText(FC.status.tw, FC.status.twNote));
+    if (s.ytOn && s.youtube) lines.push('YouTube: ' + FC.statusText(FC.status.yt, FC.status.ytNote));
+    if (lines.join('\n') !== tip) { tip = lines.join('\n'); FC.host('tip', tip); }
+  };
+  FC.onStatus(() => { drawHead(); if (!hist.length) renderAll(); if (!OBS) sendTip(); });
   setInterval(stats, 60e3);
   setInterval(() => { if (FC.s.hdrClock) drawHead(); }, 15e3);
 
-  // Host state (lock, hotkeys) pushed by the app, also fetched on load.
+  // Host state (lock, hotkeys) pushed by the app, also fetched on load. The OBS source is always locked.
   window.fcHost = (st) => {
-    Object.assign(host, st);
+    Object.assign(host, st, OBS ? { locked: true } : {});
     document.body.classList.toggle('locked', !!host.locked);
     if (host.locked && back) { back = 0; renderAll(); }
+    if (!hist.length) renderAll();
     hint.textContent = FC.t('Тягни — перемістити · краї — розмір · {hk} — закріпити', { hk: host.hk?.[1] || 'Alt+Shift+X' });
   };
   FC.state().then(window.fcHost);
   // The host's own texts (tray menu, window titles) follow the page language.
   let lang = '';
-  const sendLang = () => { if (FC.lang() !== lang) { lang = FC.lang(); FC.host('lang', lang); window.fcHost({}); } };
+  const sendLang = () => { if (!OBS && FC.lang() !== lang) { lang = FC.lang(); FC.host('lang', lang); window.fcHost({}); } };
 
-  // Test messages from the settings page.
-  addEventListener('storage', (e) => {
-    if (e.key !== 'fc.test' || !e.newValue) return;
-    const t = JSON.parse(e.newValue);
-    FC.emit({ platform: t.platform || 'tw', kind: t.kind || 'chat', id: 'test' + Date.now(), login: t.name.toLowerCase(), name: t.name, text: t.text, parts: [{ t: t.text }], first: !!t.first, badges: t.badges || {}, amount: t.amount || '', reply: t.reply || null, highlighted: !!t.highlighted, reward: !!t.reward, color: t.color || '' });
-  });
+  // Test messages from the settings page: through the shared storage here, through /events in the OBS source.
+  const test = (t) => FC.emit({ platform: t.platform || 'tw', kind: t.kind || 'chat', id: 'test' + Date.now(), login: t.name.toLowerCase(), name: t.name, text: t.text, parts: [{ t: t.text }], first: !!t.first, badges: t.badges || {}, amount: t.amount || '', reply: t.reply || null, highlighted: !!t.highlighted, reward: !!t.reward, color: t.color || '' });
+  if (OBS) {
+    const es = new EventSource('/events');
+    es.addEventListener('settings', () => FC.pull());
+    es.addEventListener('test', (e) => { try { test(JSON.parse(e.data)); } catch { /* not a test message */ } });
+  } else {
+    addEventListener('storage', (e) => { if (e.key === 'fc.test' && e.newValue) test(JSON.parse(e.newValue)); });
+  }
 
   let cur = '';
   function connect() {
@@ -197,8 +239,20 @@
     if (tw + '#' + yt !== cur) stats();
     cur = tw + '#' + yt;
   }
-  FC.onChange(() => { apply(); connect(); sendLang(); });
+  FC.onChange(() => { apply(); wake(); connect(); sendLang(); if (!OBS) sendTip(); });
   apply();
-  connect();
-  sendLang();
+  wake();
+  // Channels only once the settings file is read: the page storage may be stale or empty.
+  FC.ready.then((hasHost) => {
+    connect();
+    sendLang();
+    if (OBS) return;
+    sendTip();
+    // First start (or no channel left): the settings open on the channels page.
+    const s = FC.s;
+    if (hasHost && !s.twitch && !s.youtube) {
+      try { localStorage.setItem('fc.page', 'channels'); } catch { /* storage unavailable */ }
+      FC.host('settings');
+    }
+  });
 })();
