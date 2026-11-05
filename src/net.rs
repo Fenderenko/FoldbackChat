@@ -1,7 +1,8 @@
 //! Local HTTP server on 127.0.0.1 (plain std, one thread per connection) and a small WinHTTP client.
 //! Routes: the pages (embedded in release, read from web/ in debug; /obs — the chat as an OBS browser source),
-//! /events (SSE fan-out of /push, used by the OBS scenes and the /obs page), /store (settings and sound files),
-//! /proxy (YouTube requests with a consent cookie), /cmd and /state (host).
+//! /dock — the chat as an OBS dock), /events (SSE fan-out of /push, used by the OBS scenes and the /obs page),
+//! /api/* (the local API, api.rs), /store (settings and sound files), /proxy (YouTube requests with a consent
+//! cookie), /cmd and /state (host).
 
 use std::{
     ffi::c_void,
@@ -45,6 +46,7 @@ pub fn start(on_cmd: Box<dyn Fn(String) + Send + Sync>) -> bool {
     thread::spawn(|| loop {
         thread::sleep(Duration::from_secs(20));
         broadcast_raw(b": ping\n\n");
+        crate::api::ping();
     });
     true
 }
@@ -72,6 +74,8 @@ fn page(name: &str) -> Option<(Vec<u8>, &'static str)> {
     {
         let b: &[u8] = match name {
             "overlay.html" => include_bytes!("../web/overlay.html"),
+            "dock.html" => include_bytes!("../web/dock.html"),
+            "dock.js" => include_bytes!("../web/dock.js"),
             "settings.html" => include_bytes!("../web/settings.html"),
             "style.css" => include_bytes!("../web/style.css"),
             "common.js" => include_bytes!("../web/common.js"),
@@ -100,25 +104,25 @@ fn handle(mut s: TcpStream) -> std::io::Result<()> {
     r.read_line(&mut line)?;
     let mut it = line.split_whitespace();
     let (method, target) = (it.next().unwrap_or("").to_string(), it.next().unwrap_or("/").to_string());
-    let mut len = 0usize;
-    let mut origin = String::new();
+    let (mut len, mut origin, mut ws_key) = (0usize, String::new(), String::new());
     loop {
         let mut h = String::new();
         if r.read_line(&mut h)? == 0 || h == "\r\n" || h == "\n" {
             break;
         }
-        if let Some((k, v)) = h.split_once(':')
-            && k.eq_ignore_ascii_case("origin")
-        {
-            origin = v.trim().to_string();
-        }
-        if let Some((k, v)) = h.split_once(':')
-            && k.eq_ignore_ascii_case("content-length")
-        {
+        let Some((k, v)) = h.split_once(':') else { continue };
+        let v = v.trim();
+        if k.eq_ignore_ascii_case("origin") {
+            origin = v.to_string();
+        } else if k.eq_ignore_ascii_case("sec-websocket-key") {
+            ws_key = v.to_string();
+        } else if k.eq_ignore_ascii_case("content-length") {
             // Sound files (data URLs) go to /store: up to 1.5 MB as a file, about 2 MB as text.
-            len = v.trim().parse().unwrap_or(0).min(4 << 20);
+            len = v.parse().unwrap_or(0).min(4 << 20);
         }
     }
+    // Writes come from the app's own pages or from programs (no Origin); a site open in a browser could post here too.
+    let trusted = origin.is_empty() || origin == format!("http://127.0.0.1:{PORT}");
     let mut body = vec![0u8; len];
     r.read_exact(&mut body)?;
     let (path, query) = target.split_once('?').unwrap_or((&target, ""));
@@ -129,13 +133,31 @@ fn handle(mut s: TcpStream) -> std::io::Result<()> {
     match path {
         "/" | "/overlay" | "/obs" => serve(&mut s, "overlay.html"),
         "/settings" => serve(&mut s, "settings.html"),
+        "/dock" => serve(&mut s, "dock.html"),
+        "/api/events" => crate::api::sse(s),
+        "/api/ws" if !ws_key.is_empty() => crate::api::websocket(s, &ws_key, trusted),
+        "/api/recent" => respond(&mut s, "200 OK", "application/json; charset=utf-8", crate::api::recent().as_bytes()),
+        "/api/featured" => respond(&mut s, "200 OK", "application/json; charset=utf-8", crate::api::featured().as_bytes()),
+        // Commands change the stream, so POST only: a GET can come from any page (an <img>) without an Origin.
+        "/api/push" | "/api/feature" | "/api/unfeature" if method != "POST" || !trusted => respond(&mut s, "403 Forbidden", "text/plain", b""),
+        "/api/push" => {
+            crate::api::push(query, &body);
+            respond(&mut s, "204 No Content", "text/plain", b"")
+        }
+        "/api/feature" => {
+            let ok = crate::api::feature(&param(query, "id").unwrap_or_else(|| "last".into()), &body);
+            respond(&mut s, if ok { "204 No Content" } else { "404 Not Found" }, "text/plain", b"")
+        }
+        "/api/unfeature" => {
+            crate::api::unfeature(&param(query, "id").unwrap_or_default());
+            respond(&mut s, "204 No Content", "text/plain", b"")
+        }
         "/store" => {
             let Some(file) = param(query, "k").and_then(|k| store_file(&k)) else {
                 return respond(&mut s, "404 Not Found", "text/plain", b"unknown key");
             };
             if method == "POST" {
-                // Only the app's own pages may write (a site open in a browser could post here too).
-                if !origin.is_empty() && origin != format!("http://127.0.0.1:{PORT}") {
+                if !trusted {
                     return respond(&mut s, "403 Forbidden", "text/plain", b"");
                 }
                 // Written aside and renamed: a crash mid-write never leaves half a file.

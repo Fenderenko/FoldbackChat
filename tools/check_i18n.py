@@ -16,7 +16,7 @@ LIT = re.compile(r"'((?:[^'\\\n]|\\.)*)'")
 
 def keys():
     found = {}
-    for name in ('common.js', 'overlay.js', 'settings.js'):
+    for name in ('common.js', 'overlay.js', 'settings.js', 'dock.js'):
         with open(os.path.join(ROOT, name), encoding='utf-8') as f:
             for n, line in enumerate(f, 1):
                 if line.lstrip().startswith('//'):

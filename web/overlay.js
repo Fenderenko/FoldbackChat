@@ -2,11 +2,15 @@
 // Messages are kept in a short history and the list is rebuilt from it on every settings change, so
 // options apply to messages already on screen and a larger "how many" brings hidden ones back.
 // At /obs the same page is an OBS browser source: always locked, silent, no relay; settings and test
-// messages come from the host over /events.
+// messages come from the host over /events. /obs?featured shows only the featured message (from /api/events).
+// The in-app window is the source of the local API: every message, deletion and state goes to /api/push.
 (() => {
   const list = document.getElementById('list'), head = document.getElementById('head'), hint = document.getElementById('hint'), more = document.getElementById('more');
-  const OBS = location.pathname === '/obs' || new URLSearchParams(location.search).has('obs');
+  const params = new URLSearchParams(location.search);
+  const OBS = location.pathname === '/obs' || params.has('obs');
+  const FEAT = OBS && params.has('featured');
   document.body.classList.toggle('obs', OBS);
+  document.body.classList.toggle('feat', FEAT);
   const ICON = {
     tw: '<svg class="pf" viewBox="0 0 24 24"><path fill="#a970ff" d="M4 3 3 7v12h4v3h3l3-3h4l5-5V3H4Zm16 10-3 3h-4l-3 3v-3H6V5h14v8Z"/><path fill="#a970ff" d="M15 7h2v5h-2zM10 7h2v5h-2z"/></svg>',
     yt: '<svg class="pf" viewBox="0 0 24 24"><rect x="1.5" y="5" width="21" height="14" rx="4" fill="#ff3d3d"/><path fill="#fff" d="m10 9 5.2 3-5.2 3z"/></svg>',
@@ -43,6 +47,7 @@
     b.setProperty('--hfs', s.hdrSize + 'px');
     b.setProperty('--hc', s.hdrColor);
     b.setProperty('--hbg', 1 - s.hdrT);
+    b.setProperty('--fscale', s.featScale);
     document.body.classList.toggle('lines', s.style === 'lines');
     document.body.classList.toggle('noletter', !s.letter);
     document.body.classList.toggle('upper', !!s.nameUpper);
@@ -114,6 +119,7 @@
   }
 
   function renderAll() {
+    if (FEAT) { list.replaceChildren(...(featured ? [build(FC.fromApi(featured))] : [])); return; }
     const items = visible().map((m) => { const el = build(m); el.style.animation = 'none'; return el; });
     if (FC.s.newestTop) items.reverse();
     list.replaceChildren(...(hist.length ? items : placeholder()));
@@ -146,6 +152,7 @@
   // "Hide when quiet": the whole chat shows for idleHide seconds after a message or a settings change.
   let idleTimer = 0;
   function wake() {
+    if (FEAT) return;
     clearTimeout(idleTimer);
     document.body.classList.remove('idle');
     if (FC.s.idleHide > 0) idleTimer = setTimeout(() => document.body.classList.add('idle'), FC.s.idleHide * 1000);
@@ -167,8 +174,13 @@
     add(m);
     sound(m);
     if (m.platform === 'yt' && !OBS) FC.relay(m);
+    if (!OBS) FC.apiPush(`id=${encodeURIComponent(m.id || '')}&login=${encodeURIComponent(m.login || '')}`, FC.apiMsg(m));
   });
   FC.onClear = (c) => {
+    if (!OBS) {
+      if (c.id) FC.apiPush('del=' + encodeURIComponent(c.id), { type: 'delete', id: c.id });
+      else FC.apiPush('clear=' + encodeURIComponent(c.login || ''), { type: 'clear', login: c.login || '' });
+    }
     const hit = (m) => (c.id && m.id === c.id) || (c.login && (m.login || '').toLowerCase() === c.login.toLowerCase()) || (!c.id && !c.login);
     hist = hist.filter((m) => !hit(m));
     renderAll();
@@ -202,7 +214,8 @@
     if (s.ytOn && s.youtube) lines.push('YouTube: ' + FC.statusText(FC.status.yt, FC.status.ytNote));
     if (lines.join('\n') !== tip) { tip = lines.join('\n'); FC.host('tip', tip); }
   };
-  FC.onStatus(() => { drawHead(); if (!hist.length) renderAll(); if (!OBS) sendTip(); });
+  const sendStatus = () => FC.apiPush('', { type: 'status', twitch: FC.status.tw, youtube: FC.status.yt, twitchNote: FC.status.twNote || '', youtubeNote: FC.status.ytNote || '' });
+  FC.onStatus(() => { drawHead(); if (!hist.length) renderAll(); if (!OBS) { sendTip(); sendStatus(); } });
   setInterval(stats, 60e3);
   setInterval(() => { if (FC.s.hdrClock) drawHead(); }, 15e3);
 
@@ -224,13 +237,31 @@
   if (OBS) {
     const es = new EventSource('/events');
     es.addEventListener('settings', () => FC.pull());
-    es.addEventListener('test', (e) => { try { test(JSON.parse(e.data)); } catch { /* not a test message */ } });
+    if (!FEAT) es.addEventListener('test', (e) => { try { test(JSON.parse(e.data)); } catch { /* not a test message */ } });
   } else {
     addEventListener('storage', (e) => { if (e.key === 'fc.test' && e.newValue) test(JSON.parse(e.newValue)); });
   }
 
+  // The featured source: one card, as in the chat but larger; it leaves after featSec seconds (the host is told,
+  // so the dock shows it as taken off too).
+  let featured = null, featTimer = 0;
+  function feature(a) {
+    clearTimeout(featTimer);
+    const old = list.firstChild;
+    if (old) { old.classList.add('gone'); setTimeout(() => old.remove(), 800); }
+    featured = a;
+    if (!a) return;
+    list.appendChild(build(FC.fromApi(a)));
+    if (FC.s.featSec > 0) featTimer = setTimeout(() => fetch('/api/unfeature?id=' + encodeURIComponent(a.id || ''), { method: 'POST' }).catch(() => {}), FC.s.featSec * 1000);
+  }
+  if (FEAT) {
+    const api = new EventSource('/api/events');
+    api.onmessage = (e) => { try { const d = JSON.parse(e.data); if (d.type === 'featured' && (d.message?.id || null) !== (featured?.id || null)) feature(d.message); } catch { /* not JSON */ } };
+  }
+
   let cur = '';
   function connect() {
+    if (FEAT) return;
     const s = FC.s;
     const tw = [s.twitch, s.twitchOn, s.e7tv, s.eBttv, s.eFfz].join('|'), yt = [s.youtube, s.ytOn].join('|');
     const [ptw, pyt] = cur ? cur.split('#') : ['', ''];

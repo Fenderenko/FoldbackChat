@@ -19,7 +19,9 @@
     hdrSize: 13, hdrColor: '#e6e6e6', hdrT: 0.45,
     // Messages
     // idleHide: the whole chat hides after that many quiet seconds and comes back with a new message (0 — never)
-    maxMsgs: 12, fade: 0, idleHide: 0, newestTop: false, hideBots: true, hideCommands: false, hideLinks: false, showReplies: true,
+    maxMsgs: 12, fade: 0, idleHide: 0, newestTop: false,
+    // Featured message (the /obs?featured source): seconds on screen (0 — until taken off), size against the chat
+    featSec: 10, featScale: 1.4, hideBots: true, hideCommands: false, hideLinks: false, showReplies: true,
     bots: 'streamelements, nightbot, moobot, streamlabs, soundalerts, sery_bot, wizebot, fossabot, commanderroot',
     ignore: '',
     // Highlights
@@ -226,6 +228,25 @@
     m.own = !!m.own;
     subs.forEach((f) => f(m));
   };
+
+  // ---------- local API (docs/API.md) ----------
+  // A message as the API gives it out, and back: the dock and the featured source draw what the API sends.
+  const PF = { tw: 'twitch', yt: 'youtube' };
+  FC.apiMsg = (m) => ({
+    type: 'message', id: m.id || '', platform: PF[m.platform] || m.platform || '', kind: m.kind || 'chat',
+    user: { login: m.login || '', name: m.name || '', color: m.color || '', badges: m.badges || {} },
+    text: m.text || '', parts: (m.parts || []).map((p) => (p.img ? { emote: p.img, alt: p.alt || '' } : { text: p.t || '' })),
+    amount: m.amount || '', first: !!m.first, mention: !!m.mention, own: !!m.own, reply: m.reply || null,
+    highlighted: !!m.highlighted, reward: !!m.reward, time: m.at || Date.now(),
+  });
+  FC.fromApi = (a) => ({
+    platform: a.platform === 'youtube' ? 'yt' : 'tw', kind: a.kind || 'chat', id: a.id || '', login: a.user?.login || '', name: a.user?.name || '',
+    color: a.user?.color || '', badges: a.user?.badges || {}, text: a.text || '',
+    parts: (a.parts || [{ text: a.text || '' }]).map((p) => (p.emote ? { img: p.emote, alt: p.alt || '' } : { t: p.text || '' })),
+    amount: a.amount || '', first: !!a.first, mention: !!a.mention, own: !!a.own, reply: a.reply || null,
+    highlighted: !!a.highlighted, reward: !!a.reward, at: a.time || Date.now(),
+  });
+  FC.apiPush = (q, obj) => fetch('/api/push?' + q, { method: 'POST', body: JSON.stringify(obj) }).catch(() => {});
 
   // ---------- Twitch (anonymous, read-only IRC) ----------
   const unesc = (v) => v.replace(/\\(.)/g, (x, c) => (c === 's' ? ' ' : c === ':' ? ';' : c === 'r' ? '\r' : c === 'n' ? '\n' : c));

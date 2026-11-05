@@ -287,19 +287,28 @@
     row('Гра має бути у вікні без рамок', 'у повноекранному режимі гра перекриває будь-які вікна', el('<span class="lab">borderless</span>')),
   ]);
 
-  // The same chat as an OBS browser source (the /obs page reads the settings file and follows its changes).
-  const obsUrl = `http://127.0.0.1:${location.port || 8792}/obs`;
-  const urlBox = el(`<input type="text" class="url" readonly value="${esc(obsUrl)}">`);
-  urlBox.onclick = () => urlBox.select();
-  const copied = el('<span class="val"></span>');
-  const copy = button('Копіювати', async () => {
-    try { await navigator.clipboard.writeText(obsUrl); } catch { urlBox.select(); document.execCommand('copy'); }
-    copied.textContent = t('скопійовано');
-    setTimeout(() => { copied.textContent = ''; }, 2000);
-  });
+  // The chat for OBS: browser sources (/obs, /obs?featured — they read the settings file and follow its changes),
+  // the dock (/dock) and the local API for other apps.
+  const base = `127.0.0.1:${location.port || 8792}`;
+  const address = (url) => {
+    const box = el(`<input type="text" class="url" readonly value="${esc(url)}">`);
+    box.onclick = () => box.select();
+    const copied = el('<span class="val"></span>');
+    const copy = button('Копіювати', async () => {
+      try { await navigator.clipboard.writeText(url); } catch { box.select(); document.execCommand('copy'); }
+      copied.textContent = t('скопійовано');
+      setTimeout(() => { copied.textContent = ''; }, 2000);
+    });
+    return [box, copy, copied];
+  };
   page('obs', 'OBS', [
-    row('Чат як джерело OBS', 'в OBS: Джерела → + → Браузер, встав цю адресу; ширина й висота — на свій смак, наприклад 420 × 620', [urlBox, copy, copied]),
+    row('Чат як джерело OBS', 'в OBS: Джерела → + → Браузер, встав цю адресу; ширина й висота — на свій смак, наприклад 420 × 620', address(`http://${base}/obs`)),
     el(`<div class="note">${esc(t('Джерело показує той самий чат: канали, вигляд і зміни налаштувань підхоплює одразу. Звуків і підказок у ньому немає, а програма має бути відкрита. Чат поверх гри працює як і раніше: можна лишити обидва або сховати вікно.'))}</div>`),
+    row('Док для OBS', 'в OBS: Docks → Custom Browser Docks, встав цю адресу; там уся історія чату, а клац по повідомленню виводить його на стрім', address(`http://${base}/dock`)),
+    row('Обране повідомлення', 'окреме джерело «Браузер» для повідомлення, обраного в доці: картка як у чаті, лише більша; наприклад 800 × 300', address(`http://${base}/obs?featured`)),
+    row('Скільки показувати обране', '0 — доки не прибереш у доці', range('featSec', 0, 60, 1, (v) => (v ? sec(v) : t('доки не прибереш')))),
+    row('Розмір обраного', 'відносно розміру тексту чату', range('featScale', 1, 2.5, 0.1, (v) => v.toFixed(1) + '×')),
+    row('API для інших програм', 'усі повідомлення й події як JSON: WebSocket або SSE (Streamer.bot, Stream Deck, свої скрипти)', [...address(`ws://${base}/api/ws`), button('Опис', () => FC.host('open', 'api'))]),
   ]);
 
   const hkBtns = [];

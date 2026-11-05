@@ -5,6 +5,7 @@
 //! takes only the game. For the stream itself the same chat is an OBS browser source (/obs).
 //! The pages talk to this host over the local HTTP server (net.rs).
 
+mod api;
 mod net;
 
 use std::{
@@ -751,6 +752,7 @@ fn command(q: &str) {
             let url = match v.as_str() {
                 "repo" => REPO.to_string(),
                 "releases" => format!("{REPO}/releases/latest"),
+                "api" => format!("{REPO}/blob/main/docs/API.md"),
                 _ => return,
             };
             unsafe {
@@ -899,8 +901,11 @@ fn exec_overlay(js: &str) {
 fn create_env() {
     let data = HSTRING::from(webview_dir().as_os_str());
     let opts = CoreWebView2EnvironmentOptions::default();
+    // A hidden chat still feeds the OBS dock and the API: no timer throttling of hidden or covered pages.
     unsafe {
-        opts.set_additional_browser_arguments("--autoplay-policy=no-user-gesture-required".to_string());
+        opts.set_additional_browser_arguments(
+            "--autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows".to_string(),
+        );
     }
     let opts: ICoreWebView2EnvironmentOptions = opts.into();
     let h = CreateCoreWebView2EnvironmentCompletedHandler::create(Box::new(|res, env| {

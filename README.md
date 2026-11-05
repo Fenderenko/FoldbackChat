@@ -24,6 +24,16 @@ Sources → + → Browser, URL `http://127.0.0.1:8792/obs` (the settings, page O
 height, e.g. 420 × 620. The source follows your channels and look, settings changes apply at once, test messages from
 the settings show there too. It has no sounds, and the app has to be running.
 
+**Dock and featured message.** Docks → Custom Browser Docks, URL `http://127.0.0.1:8792/dock`: the whole chat history
+right in the OBS window. Click a message and it shows up on stream in a separate Browser source,
+`http://127.0.0.1:8792/obs?featured` (a card as in the chat, only larger); click it again, or wait the set seconds,
+and it goes away.
+
+## For other apps
+Every message and event (subs, raids, bits, Super Chats, deletions, channel states) as JSON over WebSocket
+`ws://127.0.0.1:8792/api/ws` or SSE `http://127.0.0.1:8792/api/events`, the last 100 messages, and commands to feature
+a message — for Streamer.bot, Stream Deck or your own scripts. See [docs/API.md](docs/API.md).
+
 ## Hotkeys (change them in the settings)
 - **Alt+Shift+C** — show / hide the chat
 - **Alt+Shift+X** — lock / unlock. An unlocked chat can be dragged, resized by its edges and scrolled back with the
@@ -59,6 +69,9 @@ copy target\release\FoldbackChat.exe FoldbackChat.exe
 Python is needed only for the helper scripts in `tools/`: `mkicon.py` draws the icons (`assets/`), `i18n_src.py` holds
 the translations and generates `web/i18n.js`, `check_i18n.py` checks them. Their results are in the repository, so the
 build doesn't need Python.
+
+## Support
+Foldback Chat is free. If it is useful to you, you can support it: [monobank jar](https://send.monobank.ua/jar/6VR4c6nxzz).
 
 ## License
 GPL-3.0 — see [LICENSE](LICENSE).
