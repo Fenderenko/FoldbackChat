@@ -97,7 +97,7 @@ Python не потрібен.
 ## Підтримати
 
 <p align="center">
-  <a href="https://send.monobank.ua/jar/6VR4c6nxzz"><img src="docs/heart.svg" width="96" alt="Підтримати Foldback Chat"></a>
+  <a href="https://send.monobank.ua/jar/6VR4c6nxzz"><img src="docs/heart.png" width="96" alt="Підтримати Foldback Chat"></a>
 </p>
 
 Foldback Chat безкоштовний. Якщо він тобі знадобився, можна підтримати розробку: [банка monobank](https://send.monobank.ua/jar/6VR4c6nxzz).

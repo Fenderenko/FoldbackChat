@@ -96,7 +96,7 @@ build doesn't need Python.
 ## Support
 
 <p align="center">
-  <a href="https://send.monobank.ua/jar/6VR4c6nxzz"><img src="docs/heart.svg" width="96" alt="Support Foldback Chat"></a>
+  <a href="https://send.monobank.ua/jar/6VR4c6nxzz"><img src="docs/heart.png" width="96" alt="Support Foldback Chat"></a>
 </p>
 
 Foldback Chat is free. If it is useful to you, you can support it: [monobank jar](https://send.monobank.ua/jar/6VR4c6nxzz).
