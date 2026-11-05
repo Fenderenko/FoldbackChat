@@ -35,6 +35,8 @@ Keep it **over your game**, where only you see it, put it **in OBS** for your vi
 - **Filters.** Bots, commands, links, ignored people.
 - **For other apps.** Every message and event as JSON over WebSocket or SSE — for Streamer.bot, Stream Deck or your own
   scripts.
+- **Window themes.** The settings and the dock in Black hole, Same as Windows (light or dark, with the Windows accent),
+  Black (OLED), Nebula, Neptune, Moon, Twitch, Discord or your own colours.
 - **9 languages** (English, Українська, Deutsch, Français, Español, Português, Polski, Italiano, Türkçe), settings in a
   file, one small exe without an installer.
 

@@ -78,22 +78,36 @@ body.hl-bar :is(.msg.mention, .msg.first, .msg.event)::after { content: ''; posi
 body.hl-tint :is(.msg.mention, .msg.first, .msg.event) { background: color-mix(in srgb, var(--h) 26%, color-mix(in srgb, var(--cardc, #121212) calc(var(--card, .82) * 100%), transparent)); }
 .msg.own .L { background: #f2f2f2; }
 body.lines .msg .L { display: none; }
-body.lines .msg .b { display: flex; gap: .5em; align-items: baseline; padding: .3em .7em; }
+body.lines .msg .b { display: flex; flex-wrap: wrap; column-gap: .5em; align-items: baseline; padding: .3em .7em; }
 body.lines .msg .top { flex: none; }
 body.lines .msg .top .t { margin-left: 0; order: -1; }
-body.lines .msg .x { margin: 0; }
+/* The message takes the rest of the line and wraps under itself; a reply sits on a line of its own above. */
+body.lines .msg .x { margin: 0; flex: 1 1 0; min-width: 8em; }
+body.lines .msg .rp { flex: 0 0 100%; order: -1; margin: 0 0 .1em; }
 @keyframes in { from { opacity: 0; transform: translateX(12px); } }
-/* ---------- settings: neutral dark, one hairline per edge, no colour but status ---------- */
-body.settings { --sbg: #0f0f10; --surf: #161618; --surf2: #1d1d20; --bd: rgba(255, 255, 255, .08); --hi: #e8e8ea;
-  color-scheme: dark; background: var(--sbg); font: 14px/1.45 var(--ui); display: grid; grid-template-columns: 220px 1fr; }
+/* ---------- window theme (settings, dock): a theme sets the base colours (FC.applyTheme), the rest is mixed
+   from the text colour, so the same rules serve dark and light themes. Defaults: «Black hole». ---------- */
+body.settings, body.dock {
+  --sbg: #0f0f10; --surf: #161618; --surf2: #1d1d20; --fg: #ececec; --dim: #8e8e93; --hi: #e8e8ea; --ink: #121212; --fx: none;
+  --bd: color-mix(in srgb, var(--fg) 9%, transparent); --bd2: color-mix(in srgb, var(--fg) 24%, transparent);
+  --hov: color-mix(in srgb, var(--fg) 5%, transparent); --sel: color-mix(in srgb, var(--fg) 9%, transparent);
+  --surf3: color-mix(in srgb, var(--fg) 8%, var(--surf2)); --mute: color-mix(in srgb, var(--dim) 70%, var(--sbg));
+  color: var(--fg); background: var(--fx), var(--sbg); background-attachment: fixed;
+}
+/* Light themes: the red, orange and amber of the dark ones are too pale on white. */
+body.settings.light, body.dock.light { color-scheme: light; --danger: #c4314b; --warn: #b5541c; --caution: #8a5a00; }
+/* ---------- settings: one hairline per edge, no colour but the accent and status ---------- */
+body.settings {
+  color-scheme: dark; font: 14px/1.45 var(--ui); display: grid; grid-template-columns: 220px 1fr; }
 nav { padding: 22px 12px; border-right: 1px solid var(--bd); position: sticky; top: 0; height: 100vh; overflow-y: auto; }
 nav .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; font: 600 15px/1 var(--ui); margin-bottom: 10px; }
 nav .brand img { width: 26px; height: 26px; border-radius: 6px; }
-nav .grp { padding: 14px 10px 6px; font-size: 11.5px; font-weight: 500; color: #6c6c72; }
+nav .grp { padding: 14px 10px 6px; font-size: 11.5px; font-weight: 500; color: var(--mute); }
 nav a { display: flex; align-items: center; gap: 10px; padding: 6px 10px; margin-bottom: 1px; color: var(--dim); text-decoration: none; font-size: 13.5px; border-radius: 6px; }
 nav a svg { width: 16px; height: 16px; flex: none; opacity: .85; }
-nav a:hover { color: var(--fg); background: rgba(255, 255, 255, .04); }
-nav a.on { color: var(--fg); background: rgba(255, 255, 255, .07); }
+nav a:hover { color: var(--fg); background: var(--hov); }
+nav a.on { color: var(--fg); background: var(--sel); }
+nav a.on svg { color: var(--hi); }
 main { padding: 26px 40px 80px; max-width: 900px; }
 section { margin-bottom: 40px; }
 section h2 { font: 600 20px/1.2 var(--ui); letter-spacing: -.01em; margin: 0 0 8px; padding-bottom: 14px; border-bottom: 1px solid var(--bd); }
@@ -103,26 +117,26 @@ section h2 { font: 600 20px/1.2 var(--ui); letter-spacing: -.01em; margin: 0 0 8
 .ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 option { background: var(--surf2); color: var(--fg); }
 input[type=text], select, textarea { background: var(--surf); color: var(--fg); border: 1px solid var(--bd); padding: 7px 10px; font: 13.5px var(--ui); border-radius: 6px; min-width: 260px; outline: none; }
-input[type=text]:focus, select:focus, textarea:focus { border-color: rgba(255, 255, 255, .24); }
+input[type=text]:focus, select:focus, textarea:focus { border-color: var(--hi); }
 textarea { width: 100%; min-height: 64px; resize: vertical; }
 input[type=range] { width: 260px; accent-color: var(--hi); }
 input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--hi); }
 input[type=color] { width: 40px; height: 30px; border: 1px solid var(--bd); border-radius: 6px; background: var(--surf); padding: 3px; }
 button { background: var(--surf2); color: var(--fg); border: 1px solid var(--bd); padding: 7px 13px; font: 500 13px var(--ui); cursor: pointer; border-radius: 6px; }
-button:hover { background: #26262a; border-color: rgba(255, 255, 255, .14); }
-button.danger { color: #ff8080; }
+button:hover { background: var(--surf3); border-color: var(--bd2); }
+button.danger { color: var(--danger, #ff8080); }
 button.danger:hover { background: rgba(255, 90, 90, .1); border-color: rgba(255, 90, 90, .35); }
 .val { color: var(--dim); font: 12.5px var(--mono); min-width: 50px; }
 .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--dim); }
-.pill i { width: 7px; height: 7px; border-radius: 50%; background: #4a4a4f; }
-.pill.live i { background: var(--hi); box-shadow: 0 0 6px rgba(255, 255, 255, .5); }
+.pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--bd2); }
+.pill.live i { background: var(--hi); box-shadow: 0 0 6px color-mix(in srgb, var(--hi) 60%, transparent); }
 .pill.wait i { background: #c99a45; }
 .pill.error i { background: #ff6b6b; }
 .row.off > .ctl { opacity: .35; }
 .row.off > label { color: var(--dim); }
-.offnote { display: block; margin-top: 4px; font-size: 12px; font-style: normal; color: #c99a45; }
+.offnote { display: block; margin-top: 4px; font-size: 12px; font-style: normal; color: var(--caution, #c99a45); }
 .note { margin: 12px 0; padding: 10px 12px; font-size: 12.5px; line-height: 1.45; color: var(--dim); background: var(--surf); border: 1px solid var(--bd); border-radius: 6px; }
-.warn { font-size: 12.5px; color: #ff9b6b; }
+.warn { font-size: 12.5px; color: var(--warn, #ff9b6b); }
 section h2 { display: flex; align-items: center; justify-content: space-between; }
 section h2 .reset { font-size: 12px; padding: 5px 10px; color: var(--dim); }
 .hk + .clear { padding: 7px 10px; color: var(--dim); }
@@ -152,17 +166,16 @@ body.feat #head { display: none; }
 body.feat #list { justify-content: center; }
 
 /* ---------- OBS dock (/dock): the settings palette, a compact list ---------- */
-body.dock { --sbg: #0f0f10; --surf: #161618; --surf2: #1d1d20; --bd: rgba(255, 255, 255, .08); --hi: #e8e8ea;
-  color-scheme: dark; background: var(--sbg); font: 13px/1.4 var(--ui); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+body.dock { color-scheme: dark; font: 13px/1.4 var(--ui); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 body.dock header { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--bd); }
 body.dock header b { font-weight: 600; margin-right: auto; }
 body.dock .chip { padding: 2px 8px; font-size: 12px; color: var(--dim); background: none; }
-body.dock .chip.on { color: var(--fg); border-color: rgba(255, 255, 255, .24); }
+body.dock .chip.on { color: var(--fg); border-color: var(--hi); }
 /* The chat's #list is a bottom-aligned flex column; here it is a plain scrolling block. */
 body.dock #list { flex: 1; display: block; overflow-y: auto; }
-body.dock .m { padding: 5px 10px; border-bottom: 1px solid rgba(255, 255, 255, .04); cursor: pointer; overflow-wrap: anywhere; }
-body.dock .m:hover { background: var(--surf2); }
-body.dock .m.sel { background: #26262a; box-shadow: inset 3px 0 0 var(--hi); }
+body.dock .m { padding: 5px 10px; border-bottom: 1px solid var(--hov); cursor: pointer; overflow-wrap: anywhere; }
+body.dock .m:hover { background: var(--hov); }
+body.dock .m.sel { background: var(--sel); box-shadow: inset 3px 0 0 var(--hi); }
 body.dock .m.mention { box-shadow: inset 3px 0 0 #c99a45; }
 body.dock .m.sel.mention { box-shadow: inset 3px 0 0 var(--hi); }
 body.dock .m .pf { width: 13px; height: 13px; vertical-align: -2px; margin-right: 5px; }
@@ -170,6 +183,13 @@ body.dock .m .n { font-weight: 600; margin-right: 6px; }
 body.dock .m .am { font: 600 11px var(--mono); text-transform: uppercase; margin-right: 6px; color: #ffcf5a; }
 body.dock .m .x img { height: 1.6em; vertical-align: middle; }
 body.dock .empty { padding: 16px 10px; color: var(--dim); }
-body.dock #newer { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); font-size: 12px; padding: 4px 12px; border-radius: 12px; background: var(--hi); color: #121212; }
+body.dock #newer { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); font-size: 12px; padding: 4px 12px; border-radius: 12px; background: var(--hi); color: var(--ink); }
 body.dock footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-top: 1px solid var(--bd); color: var(--dim); font-size: 12px; }
 body.dock footer button { padding: 4px 10px; font-size: 12px; }
+
+/* Theme picker (settings → General): a chip per theme with its background and accent. */
+.themes { display: flex; flex-wrap: wrap; gap: 8px; }
+.themes button { display: inline-flex; align-items: center; gap: 8px; padding: 6px 11px 6px 7px; font-size: 12.5px; }
+.themes button.on { border-color: var(--hi); box-shadow: 0 0 0 1px var(--hi); }
+.themes .sw { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--bd2); position: relative; flex: none; }
+.themes .sw i { position: absolute; right: -2px; bottom: -2px; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--surf2); }

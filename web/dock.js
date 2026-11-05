@@ -13,6 +13,11 @@
   let filter = 'all', featuredId = null, unseen = 0;
   await FC.ready;
   document.documentElement.lang = FC.lang();
+  // The window theme of the settings; «Same as Windows» and OLED need the Windows accent and mode from the host.
+  const theme = async () => { const st = await FC.state(); FC.applyTheme({ accent: st.accent, light: !!st.light }); };
+  theme();
+  FC.onChange(theme);
+  matchMedia('(prefers-color-scheme: light)').addEventListener('change', theme);
   tip.textContent = t('клац — на екран, ще раз — прибрати');
   clear.textContent = t('Прибрати');
 

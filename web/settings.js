@@ -8,7 +8,17 @@
   let s = FC.load();
   // Rows that depend on another setting: greyed out with a note (`when`) or hidden (`showIf`); kept current on every change.
   const deps = [];
-  const set = (k, v) => { s[k] = v; FC.save(s); syncDeps(); };
+  const set = (k, v) => { s[k] = v; FC.save(s); syncDeps(); if (k.startsWith('ui')) theme(); };
+  // Window theme, at once; the host colours the title bar to match. win — the Windows accent and mode from /state.
+  let win = {}, caption = '';
+  function theme() {
+    FC.s = s;
+    drawThemes();
+    const c = FC.applyTheme(win);
+    const v = `${c.bg.slice(1)},${c.fg.slice(1)},${c.light ? 1 : 0}`;
+    if (v !== caption) { caption = v; FC.host('caption', v); }
+    for (const b of document.querySelectorAll('.themes button')) b.classList.toggle('on', b.dataset.k === (s.uiTheme || 'hole'));
+  }
   // Reload only once the settings file has the last change, or the page would read the older file back.
   const reload = () => FC.flush().then(() => location.reload());
   const syncDeps = () => deps.forEach(([r, cond, note, hide]) => {
@@ -354,7 +364,22 @@
     }),
     button('Вийти', () => FC.host('quit'), 'danger'),
   );
+  // Window theme: a chip per theme (its background with the accent), own colours for «custom».
+  const themeBox = el('<div class="themes"></div>');
+  const drawThemes = () => themeBox.replaceChildren(...Object.entries(FC.THEMES).map(([k, [name]]) => {
+    const c = FC.themeColors(k, k === 'win' ? { ...win, light: false } : win);
+    const b = el(`<button data-k="${k}"><span class="sw"><i></i></span>${esc(t(name))}</button>`);
+    // «Same as Windows» shows both of its modes: light and dark halves.
+    b.querySelector('.sw').style.background = k === 'win' ? 'linear-gradient(135deg, #f3f3f3 50%, #202020 50%)' : c.bg;
+    b.querySelector('.sw i').style.background = c.hi;
+    b.onclick = () => set('uiTheme', k);
+    return b;
+  }));
+  uses('uiTheme', 'uiBg', 'uiAccent');
   page('general', 'Загальне', [
+    row('Тема вікна', 'вікно налаштувань і док OBS; сам чат має свої кольори — у «Кольори» й «Фон»', themeBox),
+    showIf(row('Тло вікна', '', color('uiBg')), () => s.uiTheme === 'custom'),
+    showIf(row('Акцент', 'перемикачі, повзунки, обране', color('uiAccent')), () => s.uiTheme === 'custom'),
     row('Мова', '', langSel),
     row('Запускати з Windows', '', autostart),
     row('Разом з OBS', 'чат з’являється, коли відкривається OBS, і ховається, коли OBS закрито; вмикає й запуск з Windows', obsOnly),
@@ -400,12 +425,15 @@
   ]);
 
   syncDeps();
+  theme();
   let first = 'channels';
   try { first = localStorage.getItem('fc.page') || first; } catch { /* storage unavailable */ }
   show(pages.some(([id]) => id === first) ? first : 'channels');
 
   async function refresh() {
     const st = await FC.state();
+    const w = { accent: st.accent, light: !!st.light };
+    if (JSON.stringify(w) !== JSON.stringify(win)) { win = w; theme(); }
     lockBtn.textContent = t(st.locked ? 'Закріплено — відкріпити' : 'Відкріплено — закріпити');
     showBtn.textContent = t(st.shown ? 'Видно — сховати' : 'Сховано — показати');
     autostart.checked = !!st.autostart;

@@ -36,6 +36,8 @@
     vol: { msg: 0.5, first: 0.8, mention: 0.9, event: 0.8 },
     // Scenes
     relay: true,
+    // Window theme (settings, dock): a key of FC.THEMES; uiBg / uiAccent for «custom»
+    uiTheme: 'hole', uiBg: '#14161a', uiAccent: '#7ee0c3',
   };
 
   // Colours of the first (navy) theme: kept only where the user changed them, the rest follow the new defaults.
@@ -119,6 +121,48 @@
 
   // ---------- helpers ----------
   FC.hash = (s) => { let h = 2166136261; for (const ch of String(s)) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
+
+  // ---------- window themes (settings, dock; the chat has colours of its own) ----------
+  // The same family as Arcmix. bg — page, surf — fields, surf2 — buttons, fg / dim — text, hi — accent, ink — text on
+  // the accent. «Same as Windows» and OLED take the Windows accent (host /state), «Same as Windows» also its mode.
+  FC.THEMES = {
+    hole: ['Чорна діра', { bg: '#0f0f10', surf: '#161618', surf2: '#1d1d20', fg: '#ececec', dim: '#8e8e93', hi: '#e8e8ea', ink: '#121212' }],
+    win: ['Як у Windows', null],
+    black: ['Чорна (OLED)', { bg: '#000000', surf: '#0d0d0f', surf2: '#151518', fg: '#f2f2f2', dim: '#8a8a90', hi: 'accent', ink: '#ffffff' }],
+    pink: ['Туманність', { bg: '#0a0614', surf: '#130b22', surf2: '#1d1233', fg: '#f1e9ff', dim: '#9b8bb8', hi: '#ff2e97', ink: '#ffffff',
+      fx: 'radial-gradient(120% 45% at 100% 0%, rgba(160, 75, 255, .16), transparent 60%), radial-gradient(90% 40% at 0% 100%, rgba(25, 211, 255, .08), transparent 60%)' }],
+    blue: ['Нептун', { bg: '#0e141c', surf: '#151e2a', surf2: '#1b2635', fg: '#e6eef8', dim: '#8a9bb0', hi: '#6cb8ff', ink: '#0e141c' }],
+    gray: ['Місяць', { bg: '#151618', surf: '#1d1e21', surf2: '#25262a', fg: '#ececee', dim: '#8f9196', hi: '#d3d6dd', ink: '#151618' }],
+    twitch: ['Twitch', { bg: '#0e0e10', surf: '#18181b', surf2: '#26262c', fg: '#efeff1', dim: '#adadb8', hi: '#bf94ff', ink: '#ffffff' }],
+    discord: ['Discord', { bg: '#121214', surf: '#1a1a1e', surf2: '#28282d', fg: '#f2f3f5', dim: '#949ba4', hi: '#5865f2', ink: '#ffffff' }],
+    custom: ['Власна', null],
+  };
+  const lum = (hex) => { const n = parseInt(String(hex || '#000000').slice(1), 16); return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255; };
+  // A theme's colours; win — { accent, light } from the host.
+  FC.themeColors = (key, win = {}) => {
+    const s = FC.s, accent = /^#[0-9a-f]{6}$/i.test(win.accent || '') ? win.accent : '#4cc2ff';
+    if (key === 'win') {
+      return win.light
+        ? { bg: '#f3f3f3', surf: '#ffffff', surf2: '#fbfbfb', fg: '#1b1b1b', dim: '#5f5f5f', hi: `color-mix(in srgb, ${accent} 78%, #000)`, ink: '#ffffff', light: true }
+        : { bg: '#202020', surf: '#2b2b2b', surf2: '#2d2d2d', fg: '#ffffff', dim: '#a6a6a6', hi: accent, ink: lum(accent) > 0.55 ? '#000000' : '#ffffff' };
+    }
+    if (key === 'custom') {
+      // Own background and accent: text, fields and buttons follow the background's lightness.
+      const bg = /^#[0-9a-f]{6}$/i.test(s.uiBg || '') ? s.uiBg : '#14161a', hi = /^#[0-9a-f]{6}$/i.test(s.uiAccent || '') ? s.uiAccent : '#7ee0c3';
+      const light = lum(bg) > 0.55, fg = light ? '#1b1b1b' : '#ececec';
+      return { bg, surf: `color-mix(in srgb, ${fg} 5%, ${bg})`, surf2: `color-mix(in srgb, ${fg} 9%, ${bg})`, fg, dim: `color-mix(in srgb, ${fg} 58%, ${bg})`, hi, ink: lum(hi) > 0.55 ? '#121212' : '#ffffff', light };
+    }
+    const t = { ...(FC.THEMES[key] || FC.THEMES.hole)[1] };
+    if (t.hi === 'accent') { t.hi = accent; t.ink = lum(accent) > 0.55 ? '#000000' : '#ffffff'; }
+    return t;
+  };
+  // Puts the theme on the page; the colours of the title bar are returned for the host (plain hex only).
+  FC.applyTheme = (win = {}) => {
+    const c = FC.themeColors(FC.s.uiTheme || 'hole', win), st = document.body.style;
+    for (const [k, v] of Object.entries({ sbg: c.bg, surf: c.surf, surf2: c.surf2, fg: c.fg, dim: c.dim, hi: c.hi, ink: c.ink, fx: c.fx || 'none' })) st.setProperty('--' + k, v);
+    document.body.classList.toggle('light', !!c.light);
+    return { bg: c.bg.startsWith('#') ? c.bg : (c.light ? '#f3f3f3' : '#14161a'), fg: c.light ? '#1b1b1b' : c.fg.startsWith('#') ? c.fg : '#ececec', light: !!c.light };
+  };
 
   // ---------- name palettes ----------
   FC.PALETTES = {

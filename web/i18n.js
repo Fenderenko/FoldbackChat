@@ -276,7 +276,18 @@ window.I18N = {
   "Усі": "All",
   "↓ нові: {n}": "↓ new: {n}",
   "Повідомлень ще немає": "No messages yet",
-  "Foldback Chat не запущено": "Foldback Chat isn’t running"
+  "Foldback Chat не запущено": "Foldback Chat isn’t running",
+  "Чорна діра": "Black hole",
+  "Чорна (OLED)": "Black (OLED)",
+  "Туманність": "Nebula",
+  "Нептун": "Neptune",
+  "Місяць": "Moon",
+  "Власна": "Custom",
+  "Тема вікна": "Window theme",
+  "вікно налаштувань і док OBS; сам чат має свої кольори — у «Кольори» й «Фон»": "the settings window and the OBS dock; the chat itself has its own colours — in Colours and Background",
+  "Тло вікна": "Window background",
+  "Акцент": "Accent",
+  "перемикачі, повзунки, обране": "switches, sliders, the chosen item"
  },
  "de": {
   "Як у Windows": "Wie in Windows",
@@ -554,7 +565,18 @@ window.I18N = {
   "Усі": "Alle",
   "↓ нові: {n}": "↓ neu: {n}",
   "Повідомлень ще немає": "Noch keine Nachrichten",
-  "Foldback Chat не запущено": "Foldback Chat läuft nicht"
+  "Foldback Chat не запущено": "Foldback Chat läuft nicht",
+  "Чорна діра": "Schwarzes Loch",
+  "Чорна (OLED)": "Schwarz (OLED)",
+  "Туманність": "Nebel",
+  "Нептун": "Neptun",
+  "Місяць": "Mond",
+  "Власна": "Eigenes",
+  "Тема вікна": "Fensterdesign",
+  "вікно налаштувань і док OBS; сам чат має свої кольори — у «Кольори» й «Фон»": "das Einstellungsfenster und das OBS-Dock; der Chat selbst hat eigene Farben — unter Farben und Hintergrund",
+  "Тло вікна": "Fensterhintergrund",
+  "Акцент": "Akzent",
+  "перемикачі, повзунки, обране": "Schalter, Regler, Auswahl"
  },
  "fr": {
   "Як у Windows": "Comme Windows",
@@ -832,7 +854,18 @@ window.I18N = {
   "Усі": "Tous",
   "↓ нові: {n}": "↓ nouveaux : {n}",
   "Повідомлень ще немає": "Pas encore de messages",
-  "Foldback Chat не запущено": "Foldback Chat n’est pas lancé"
+  "Foldback Chat не запущено": "Foldback Chat n’est pas lancé",
+  "Чорна діра": "Trou noir",
+  "Чорна (OLED)": "Noir (OLED)",
+  "Туманність": "Nébuleuse",
+  "Нептун": "Neptune",
+  "Місяць": "Lune",
+  "Власна": "Personnalisé",
+  "Тема вікна": "Thème de la fenêtre",
+  "вікно налаштувань і док OBS; сам чат має свої кольори — у «Кольори» й «Фон»": "la fenêtre des paramètres et le dock OBS ; le chat lui-même a ses propres couleurs — dans Couleurs et Fond",
+  "Тло вікна": "Fond de la fenêtre",
+  "Акцент": "Accent",
+  "перемикачі, повзунки, обране": "interrupteurs, curseurs, sélection"
  },
  "es": {
   "Як у Windows": "Como en Windows",
@@ -1110,7 +1143,18 @@ window.I18N = {
   "Усі": "Todos",
   "↓ нові: {n}": "↓ nuevos: {n}",
   "Повідомлень ще немає": "Aún no hay mensajes",
-  "Foldback Chat не запущено": "Foldback Chat no está abierto"
+  "Foldback Chat не запущено": "Foldback Chat no está abierto",
+  "Чорна діра": "Agujero negro",
+  "Чорна (OLED)": "Negro (OLED)",
+  "Туманність": "Nebulosa",
+  "Нептун": "Neptuno",
+  "Місяць": "Luna",
+  "Власна": "Personalizado",
+  "Тема вікна": "Tema de la ventana",
+  "вікно налаштувань і док OBS; сам чат має свої кольори — у «Кольори» й «Фон»": "la ventana de ajustes y el panel de OBS; el chat tiene sus propios colores — en Colores y Fondo",
+  "Тло вікна": "Fondo de la ventana",
+  "Акцент": "Acento",
+  "перемикачі, повзунки, обране": "interruptores, deslizadores, lo elegido"
  },
  "pt": {
   "Як у Windows": "Como no Windows",
@@ -1388,7 +1432,18 @@ window.I18N = {
   "Усі": "Todos",
   "↓ нові: {n}": "↓ novas: {n}",
   "Повідомлень ще немає": "Ainda não há mensagens",
-  "Foldback Chat не запущено": "O Foldback Chat não está aberto"
+  "Foldback Chat не запущено": "O Foldback Chat não está aberto",
+  "Чорна діра": "Buraco negro",
+  "Чорна (OLED)": "Preto (OLED)",
+  "Туманність": "Nebulosa",
+  "Нептун": "Netuno",
+  "Місяць": "Lua",
+  "Власна": "Personalizado",
+  "Тема вікна": "Tema da janela",
+  "вікно налаштувань і док OBS; сам чат має свої кольори — у «Кольори» й «Фон»": "a janela de configurações e o painel do OBS; o chat tem cores próprias — em Cores e Fundo",
+  "Тло вікна": "Fundo da janela",
+  "Акцент": "Destaque",
+  "перемикачі, повзунки, обране": "botões, controles deslizantes, o escolhido"
  },
  "pl": {
   "Як у Windows": "Jak w Windows",
@@ -1666,7 +1721,18 @@ window.I18N = {
   "Усі": "Wszystkie",
   "↓ нові: {n}": "↓ nowe: {n}",
   "Повідомлень ще немає": "Jeszcze brak wiadomości",
-  "Foldback Chat не запущено": "Foldback Chat nie jest uruchomiony"
+  "Foldback Chat не запущено": "Foldback Chat nie jest uruchomiony",
+  "Чорна діра": "Czarna dziura",
+  "Чорна (OLED)": "Czarny (OLED)",
+  "Туманність": "Mgławica",
+  "Нептун": "Neptun",
+  "Місяць": "Księżyc",
+  "Власна": "Własny",
+  "Тема вікна": "Motyw okna",
+  "вікно налаштувань і док OBS; сам чат має свої кольори — у «Кольори» й «Фон»": "okno ustawień i dok OBS; sam czat ma własne kolory — w Kolory i Tło",
+  "Тло вікна": "Tło okna",
+  "Акцент": "Akcent",
+  "перемикачі, повзунки, обране": "przełączniki, suwaki, wybrane"
  },
  "it": {
   "Як у Windows": "Come in Windows",
@@ -1944,7 +2010,18 @@ window.I18N = {
   "Усі": "Tutti",
   "↓ нові: {n}": "↓ nuovi: {n}",
   "Повідомлень ще немає": "Ancora nessun messaggio",
-  "Foldback Chat не запущено": "Foldback Chat non è avviato"
+  "Foldback Chat не запущено": "Foldback Chat non è avviato",
+  "Чорна діра": "Buco nero",
+  "Чорна (OLED)": "Nero (OLED)",
+  "Туманність": "Nebulosa",
+  "Нептун": "Nettuno",
+  "Місяць": "Luna",
+  "Власна": "Personalizzato",
+  "Тема вікна": "Tema della finestra",
+  "вікно налаштувань і док OBS; сам чат має свої кольори — у «Кольори» й «Фон»": "la finestra delle impostazioni e il dock di OBS; la chat ha i suoi colori — in Colori e Sfondo",
+  "Тло вікна": "Sfondo della finestra",
+  "Акцент": "Accento",
+  "перемикачі, повзунки, обране": "interruttori, cursori, la scelta"
  },
  "tr": {
   "Як у Windows": "Windows ile aynı",
@@ -2222,6 +2299,17 @@ window.I18N = {
   "Усі": "Tümü",
   "↓ нові: {n}": "↓ yeni: {n}",
   "Повідомлень ще немає": "Henüz mesaj yok",
-  "Foldback Chat не запущено": "Foldback Chat çalışmıyor"
+  "Foldback Chat не запущено": "Foldback Chat çalışmıyor",
+  "Чорна діра": "Kara delik",
+  "Чорна (OLED)": "Siyah (OLED)",
+  "Туманність": "Bulutsu",
+  "Нептун": "Neptün",
+  "Місяць": "Ay",
+  "Власна": "Özel",
+  "Тема вікна": "Pencere teması",
+  "вікно налаштувань і док OBS; сам чат має свої кольори — у «Кольори» й «Фон»": "ayarlar penceresi ve OBS paneli; sohbetin kendi renkleri var — Renkler ve Arka plan bölümünde",
+  "Тло вікна": "Pencere arka planı",
+  "Акцент": "Vurgu",
+  "перемикачі, повзунки, обране": "anahtarlar, kaydırıcılar, seçilen"
  }
 };

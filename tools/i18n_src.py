@@ -284,6 +284,17 @@ ROWS = [
     ("↓ нові: {n}", "↓ new: {n}", "↓ neu: {n}", "↓ nouveaux : {n}", "↓ nuevos: {n}", "↓ novas: {n}", "↓ nowe: {n}", "↓ nuovi: {n}", "↓ yeni: {n}"),
     ("Повідомлень ще немає", "No messages yet", "Noch keine Nachrichten", "Pas encore de messages", "Aún no hay mensajes", "Ainda não há mensagens", "Jeszcze brak wiadomości", "Ancora nessun messaggio", "Henüz mesaj yok"),
     ("Foldback Chat не запущено", "Foldback Chat isn’t running", "Foldback Chat läuft nicht", "Foldback Chat n’est pas lancé", "Foldback Chat no está abierto", "O Foldback Chat não está aberto", "Foldback Chat nie jest uruchomiony", "Foldback Chat non è avviato", "Foldback Chat çalışmıyor"),
+    ("Чорна діра", "Black hole", "Schwarzes Loch", "Trou noir", "Agujero negro", "Buraco negro", "Czarna dziura", "Buco nero", "Kara delik"),
+    ("Чорна (OLED)", "Black (OLED)", "Schwarz (OLED)", "Noir (OLED)", "Negro (OLED)", "Preto (OLED)", "Czarny (OLED)", "Nero (OLED)", "Siyah (OLED)"),
+    ("Туманність", "Nebula", "Nebel", "Nébuleuse", "Nebulosa", "Nebulosa", "Mgławica", "Nebulosa", "Bulutsu"),
+    ("Нептун", "Neptune", "Neptun", "Neptune", "Neptuno", "Netuno", "Neptun", "Nettuno", "Neptün"),
+    ("Місяць", "Moon", "Mond", "Lune", "Luna", "Lua", "Księżyc", "Luna", "Ay"),
+    ("Власна", "Custom", "Eigenes", "Personnalisé", "Personalizado", "Personalizado", "Własny", "Personalizzato", "Özel"),
+    ("Тема вікна", "Window theme", "Fensterdesign", "Thème de la fenêtre", "Tema de la ventana", "Tema da janela", "Motyw okna", "Tema della finestra", "Pencere teması"),
+    ("вікно налаштувань і док OBS; сам чат має свої кольори — у «Кольори» й «Фон»", "the settings window and the OBS dock; the chat itself has its own colours — in Colours and Background", "das Einstellungsfenster und das OBS-Dock; der Chat selbst hat eigene Farben — unter Farben und Hintergrund", "la fenêtre des paramètres et le dock OBS ; le chat lui-même a ses propres couleurs — dans Couleurs et Fond", "la ventana de ajustes y el panel de OBS; el chat tiene sus propios colores — en Colores y Fondo", "a janela de configurações e o painel do OBS; o chat tem cores próprias — em Cores e Fundo", "okno ustawień i dok OBS; sam czat ma własne kolory — w Kolory i Tło", "la finestra delle impostazioni e il dock di OBS; la chat ha i suoi colori — in Colori e Sfondo", "ayarlar penceresi ve OBS paneli; sohbetin kendi renkleri var — Renkler ve Arka plan bölümünde"),
+    ("Тло вікна", "Window background", "Fensterhintergrund", "Fond de la fenêtre", "Fondo de la ventana", "Fundo da janela", "Tło okna", "Sfondo della finestra", "Pencere arka planı"),
+    ("Акцент", "Accent", "Akzent", "Accent", "Acento", "Destaque", "Akcent", "Accento", "Vurgu"),
+    ("перемикачі, повзунки, обране", "switches, sliders, the chosen item", "Schalter, Regler, Auswahl", "interrupteurs, curseurs, sélection", "interruptores, deslizadores, lo elegido", "botões, controles deslizantes, o escolhido", "przełączniki, suwaki, wybrane", "interruttori, cursori, la scelta", "anahtarlar, kaydırıcılar, seçilen"),
 ]
 
 if __name__ == '__main__':

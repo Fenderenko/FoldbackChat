@@ -95,6 +95,8 @@ struct App {
     icon: HICON,
     /// Tray tip: the app name and the state of each channel, set by the overlay page.
     tip: String,
+    /// Settings window in the page's theme: title bar background and text (0xRRGGBB), light mode.
+    caption: Option<(u32, u32, bool)>,
 }
 
 const TR_LANGS: [&str; 8] = ["en", "de", "fr", "es", "pt", "pl", "it", "tr"];
@@ -564,7 +566,7 @@ fn update_state() {
     let monitor = mons.iter().position(|m| m.0 == here).map_or(-1, |i| i as i64);
     let mons = mons.iter().map(|(_, r, p)| format!("{{\"w\":{},\"h\":{},\"primary\":{p}}}", r.right - r.left, r.bottom - r.top)).collect::<Vec<_>>().join(",");
     let json = format!(
-        "{{\"locked\":{locked},\"shown\":{shown},\"autostart\":{},\"hk\":[\"{}\",\"{}\",\"{}\"],\"hkbusy\":[{},{},{}],\"pergame\":{per_game},\"game\":\"{}\",\"games\":[{games}],\"obsonly\":{obs_only},\"monitors\":[{mons}],\"monitor\":{monitor},\"version\":\"{}\",\"port\":{}}}",
+        "{{\"locked\":{locked},\"shown\":{shown},\"autostart\":{},\"hk\":[\"{}\",\"{}\",\"{}\"],\"hkbusy\":[{},{},{}],\"pergame\":{per_game},\"game\":\"{}\",\"games\":[{games}],\"obsonly\":{obs_only},\"monitors\":[{mons}],\"monitor\":{monitor},\"accent\":\"#{:06x}\",\"light\":{},\"version\":\"{}\",\"port\":{}}}",
         autostart(),
         esc(&hk[0]),
         esc(&hk[1]),
@@ -573,6 +575,8 @@ fn update_state() {
         busy[1],
         busy[2],
         esc(&game),
+        win_accent(),
+        reg_dword(PERSONALIZE, w!("AppsUseLightTheme")).is_some_and(|v| v != 0),
         env!("CARGO_PKG_VERSION"),
         net::PORT
     );
@@ -633,13 +637,21 @@ fn tray_msg(op: NOTIFY_ICON_MESSAGE) {
     }
 }
 
+const PERSONALIZE: PCWSTR = w!("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize");
+
+fn reg_dword(key: PCWSTR, name: PCWSTR) -> Option<u32> {
+    let (mut v, mut n) = (0u32, 4u32);
+    (unsafe { RegGetValueW(HKEY_CURRENT_USER, key, name, RRF_RT_REG_DWORD, None, Some(&mut v as *mut u32 as *mut c_void), Some(&mut n)) } == ERROR_SUCCESS).then_some(v)
+}
+
 /// Light taskbar (Windows "apps / system" light mode for the taskbar).
 fn taskbar_light() -> bool {
-    let mut v = 0u32;
-    let mut n = 4u32;
-    unsafe {
-        RegGetValueW(HKEY_CURRENT_USER, w!("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"), w!("SystemUsesLightTheme"), RRF_RT_REG_DWORD, None, Some(&mut v as *mut u32 as *mut c_void), Some(&mut n)) == ERROR_SUCCESS && v != 0
-    }
+    reg_dword(PERSONALIZE, w!("SystemUsesLightTheme")).is_some_and(|v| v != 0)
+}
+
+/// The Windows accent colour as 0xRRGGBB (the registry keeps it as 0xAABBGGRR); Windows' default blue without one.
+fn win_accent() -> u32 {
+    reg_dword(w!("Software\\Microsoft\\Windows\\DWM"), w!("AccentColor")).map_or(0x0078d4, |v| (v & 0xff) << 16 | (v & 0xff00) | (v >> 16 & 0xff))
 }
 
 /// The leaf alone, light on a dark taskbar and dark on a light one (icon groups 2 / 3, see build.rs).
@@ -712,6 +724,20 @@ fn command(q: &str) {
     };
     match net::param(q, "c").as_deref() {
         Some("settings") => open_settings(),
+        Some("caption") => {
+            // "rrggbb,rrggbb,0|1": the settings page's background, text and light mode.
+            let mut it = v.split(',');
+            let mut hex = || it.next().and_then(|x| u32::from_str_radix(x, 16).ok()).filter(|&c| c <= 0xff_ffff);
+            if let (Some(bg), Some(fg)) = (hex(), hex()) {
+                let light = v.ends_with(",1");
+                app(|a| a.caption = Some((bg, fg, light)));
+                let _ = std::fs::write(data_dir().join("caption.txt"), &v);
+                let set = app(|a| a.set);
+                if !set.is_invalid() {
+                    caption_colors(set);
+                }
+            }
+        }
         Some("tip") => {
             app(|a| a.tip = v.chars().take(127).collect());
             tray_msg(NIM_MODIFY);
@@ -1012,12 +1038,7 @@ fn open_settings() {
                 return;
             };
             hwnd = created;
-            let dark = windows::core::BOOL(1);
-            let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark as *const _ as *const c_void, 4);
-            // Title bar in the page's colours (Windows 11; older systems keep the dark one).
-            for (attr, c) in [(DWMWA_CAPTION_COLOR, 0x0010_0f0fu32), (DWMWA_TEXT_COLOR, 0x00ef_eded), (DWMWA_BORDER_COLOR, 0x0020_1d1d)] {
-                let _ = DwmSetWindowAttribute(hwnd, attr, &c as *const u32 as *const c_void, 4);
-            }
+            caption_colors(hwnd);
             app(|a| a.set = hwnd);
         }
         let _ = ShowWindow(hwnd, SW_SHOWNORMAL);
@@ -1038,7 +1059,9 @@ fn open_settings() {
         app(|a| a.set_creating = false);
         let Some(ctl) = ctl.filter(|_| res.is_ok()) else { return Ok(()) };
         if let Ok(c2) = ctl.cast::<ICoreWebView2Controller2>() {
-            let _ = unsafe { c2.SetDefaultBackgroundColor(COREWEBVIEW2_COLOR { A: 255, R: 0x0f, G: 0x0f, B: 0x10 }) };
+            // The theme's background until the page paints, so opening never flashes another colour.
+            let bg = caption().0;
+            let _ = unsafe { c2.SetDefaultBackgroundColor(COREWEBVIEW2_COLOR { A: 255, R: (bg >> 16) as u8, G: (bg >> 8) as u8, B: bg as u8 }) };
         }
         set_bounds(&ctl, hwnd);
         unsafe {
@@ -1051,6 +1074,38 @@ fn open_settings() {
     }));
     unsafe {
         let _ = env.CreateCoreWebView2Controller(hwnd, &h);
+    }
+}
+
+/// The settings theme's title bar colours: set by the page, kept in caption.txt for the next start; «Black hole» before.
+fn caption() -> (u32, u32, bool) {
+    if let Some(c) = app(|a| a.caption) {
+        return c;
+    }
+    let v = std::fs::read_to_string(data_dir().join("caption.txt")).unwrap_or_default();
+    let mut it = v.trim().split(',');
+    let mut hex = || it.next().and_then(|x| u32::from_str_radix(x, 16).ok()).filter(|&c| c <= 0xff_ffff);
+    let c = match (hex(), hex()) {
+        (Some(bg), Some(fg)) => (bg, fg, v.trim().ends_with(",1")),
+        _ => (0x0f_0f10, 0xed_edef, false),
+    };
+    app(|a| a.caption = Some(c));
+    c
+}
+
+/// Title bar in the page's colours (Windows 11; older systems keep the plain dark or light one).
+fn caption_colors(hwnd: HWND) {
+    let (bg, fg, light) = caption();
+    let bgr = |c: u32| (c & 0xff) << 16 | (c & 0xff00) | (c >> 16 & 0xff);
+    unsafe {
+        let dark = windows::core::BOOL(!light as i32);
+        let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark as *const _ as *const c_void, 4);
+        for (attr, c) in [(DWMWA_CAPTION_COLOR, bgr(bg)), (DWMWA_TEXT_COLOR, bgr(fg)), (DWMWA_BORDER_COLOR, bgr(bg))] {
+            let _ = DwmSetWindowAttribute(hwnd, attr, &c as *const u32 as *const c_void, 4);
+        }
+    }
+    if let Some(c2) = app(|a| a.set_ctl.clone()).and_then(|c| c.cast::<ICoreWebView2Controller2>().ok()) {
+        let _ = unsafe { c2.SetDefaultBackgroundColor(COREWEBVIEW2_COLOR { A: 255, R: (bg >> 16) as u8, G: (bg >> 8) as u8, B: bg as u8 }) };
     }
 }
 
@@ -1123,8 +1178,10 @@ extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LR
                 LRESULT(0)
             }
             WM_SETTINGCHANGE => {
+                // Light / dark mode or the accent changed: the tray icon, and «Same as Windows» on the pages (/state).
                 if lp.0 != 0 && PCWSTR(lp.0 as *const u16).to_string().is_ok_and(|s| s == "ImmersiveColorSet") {
                     tray_theme();
+                    update_state();
                 }
                 DefWindowProcW(hwnd, msg, wp, lp)
             }
