@@ -11,6 +11,7 @@ can reach it.
 | Server-sent events (events only) | `http://127.0.0.1:8792/api/events` |
 | The last 100 messages | `GET http://127.0.0.1:8792/api/recent` |
 | The featured message now | `GET http://127.0.0.1:8792/api/featured` |
+| The channel states now (the last `status` event) | `GET http://127.0.0.1:8792/api/status` |
 
 Both streams start with the current featured state, then send every event as one JSON object (one SSE `data:` line or
 one WebSocket text frame). Keep-alive: an SSE comment or a WebSocket ping every 20 s.
@@ -25,8 +26,9 @@ Every event has a `type`.
   "id": "b8c2…",
   "platform": "twitch",
   "kind": "chat",
-  "user": { "login": "lyalka", "name": "Lyalka", "color": "#FF69B4",
-            "badges": { "owner": false, "mod": false, "vip": false, "sub": true, "member": false } },
+  "user": { "login": "lyalka", "name": "Lyalka", "color": "#FF69B4", "id": "123456789",
+            "badges": { "owner": false, "mod": false, "vip": false, "sub": true, "member": false },
+            "badgeTags": "subscriber/12,vip/1", "badgeImgs": [] },
   "text": "hi! how is the hunt going? Kappa",
   "parts": [ { "text": "hi! how is the hunt going? " }, { "emote": "https://static-cdn.jtvnw.net/…", "alt": "Kappa" } ],
   "amount": "",
@@ -40,6 +42,9 @@ Every event has a `type`.
 }
 ```
 - `platform`: `twitch` or `youtube`.
+- `user.id`: the platform's user id (Twitch user id, YouTube channel id). `user.badgeTags`: Twitch's badge tags as
+  they come (`set/version`, comma-separated); `user.badgeImgs`: badge pictures the platform sent with the message
+  (`[{ "src", "title" }]`, e.g. a YouTube member badge).
 - `kind`: `chat`, `bits`, `sub` (subs and gifted subs), `raid`, `superchat` (YouTube Super Chat or Super Sticker),
   `member` (YouTube membership).
 - `amount`: what the event is worth, as shown in the chat (`100 bits`, `$5.00`, `sub · 7 mo.`), otherwise empty.

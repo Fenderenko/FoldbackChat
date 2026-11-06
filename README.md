@@ -22,13 +22,15 @@ Keep it **over your game**, where only you see it, put it **in OBS** for your vi
   through to the game; unlocked, drag it, resize it by the edges and scroll back with the mouse wheel. A separate place
   for every fullscreen game, a choice of monitor, and "With OBS" mode: the chat shows while OBS runs.
 - **In OBS, for your viewers.** The same chat as a Browser source, a dock with the whole history right in the OBS
-  window, and one click to put any message on stream as a large card.
-- **Emotes.** Twitch, 7TV, BTTV and FFZ, YouTube emoji.
+  window, one click to put any message on stream as a large card, and an alerts source: subs, raids, bits and Super
+  Chats one at a time, with a sound.
+- **Emotes and badges.** Twitch, 7TV, BTTV and FFZ, YouTube emoji; Twitch badges as pictures (or as words), people's 7TV
+  paints and badges.
 - **Nothing important slips by.** Mentions and your own words, first-timers, moderators, subs, raids, bits, Super Chats,
   channel points — as a ring, a glow, a side bar or a tint. Replies show who and what they answer; regulars get their own
   colour and mark.
-- **Sounds.** One per kind of event, built-in or your own file, with volume and a pause between sounds. Only you hear
-  them: they never get into the stream.
+- **Sounds.** One per kind of event — soft marimba, glass and bell voices with a touch of room, or your own file — with
+  volume and a pause between sounds. Only you hear them: they never get into the stream.
 - **Your look.** Cards or compact lines, any font installed in Windows, text size, transparency, colours, name palettes
   (ready-made, your own or generated with even brightness), how many messages and when they fade. The whole chat can
   hide when it's quiet and come back with a new message.
@@ -66,8 +68,11 @@ All addresses are in the settings, page OBS, each with a copy button. The app ha
 - **The chat.** Sources → + → Browser, `http://127.0.0.1:8792/obs`, any width and height (e.g. 420 × 620). It follows
   your channels and look, settings changes apply at once, test messages from the settings show there too; no sounds.
 - **The dock.** Docks → Custom Browser Docks, `http://127.0.0.1:8792/dock`: the whole chat history in the OBS window.
+  What moderators delete stays there, struck through; a click on a name shows that person's messages only.
 - **The featured message.** Another Browser source, `http://127.0.0.1:8792/obs?featured` (e.g. 800 × 300). Click a
   message in the dock and it shows up on stream; click it again, or wait the set seconds, and it goes away.
+- **Alerts.** One more Browser source, `http://127.0.0.1:8792/obs?alerts` (e.g. 800 × 300): subs, raids, bits and Super
+  Chats one at a time, as a card in the middle or a bar from the top, with the events sound.
 
 <p align="center">
   <img src="docs/featured.png" width="560" alt="The featured message on stream: a large card with the name, the reply and an emote">

@@ -87,7 +87,7 @@ body.lines .msg .rp { flex: 0 0 100%; order: -1; margin: 0 0 .1em; }
 @keyframes in { from { opacity: 0; transform: translateX(12px); } }
 /* ---------- window theme (settings, dock): a theme sets the base colours (FC.applyTheme), the rest is mixed
    from the text colour, so the same rules serve dark and light themes. Defaults: «Black hole». ---------- */
-body.settings, body.dock {
+body.settings, body.dock, body.menu {
   --sbg: #0f0f10; --surf: #161618; --surf2: #1d1d20; --fg: #ececec; --dim: #8e8e93; --hi: #e8e8ea; --ink: #121212; --fx: none;
   --bd: color-mix(in srgb, var(--fg) 9%, transparent); --bd2: color-mix(in srgb, var(--fg) 24%, transparent);
   --hov: color-mix(in srgb, var(--fg) 5%, transparent); --sel: color-mix(in srgb, var(--fg) 9%, transparent);
@@ -95,7 +95,7 @@ body.settings, body.dock {
   color: var(--fg); background: var(--fx), var(--sbg); background-attachment: fixed;
 }
 /* Light themes: the red, orange and amber of the dark ones are too pale on white. */
-body.settings.light, body.dock.light { color-scheme: light; --danger: #c4314b; --warn: #b5541c; --caution: #8a5a00; }
+body.settings.light, body.dock.light, body.menu.light { color-scheme: light; --danger: #c4314b; --warn: #b5541c; --caution: #8a5a00; }
 /* ---------- settings: one hairline per edge, no colour but the accent and status ---------- */
 body.settings {
   color-scheme: dark; font: 14px/1.45 var(--ui); display: grid; grid-template-columns: 220px 1fr; }
@@ -193,3 +193,52 @@ body.dock footer button { padding: 4px 10px; font-size: 12px; }
 .themes button.on { border-color: var(--hi); box-shadow: 0 0 0 1px var(--hi); }
 .themes .sw { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--bd2); position: relative; flex: none; }
 .themes .sw i { position: absolute; right: -2px; bottom: -2px; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--surf2); }
+
+/* ---------- tray menu (/menu): a card by the tray icon; the window is exactly as tall as the card ---------- */
+body.menu { color-scheme: dark; font: 13px/1.35 var(--ui); height: auto; overflow: hidden; user-select: none; }
+body.menu #card { padding: 6px; }
+body.menu .hd { display: flex; align-items: center; gap: 9px; padding: 6px 8px 4px; }
+body.menu .hd img { width: 22px; height: 22px; border-radius: 6px; }
+body.menu .hd b { font-weight: 600; }
+body.menu .hd .v { margin-left: auto; font: 11px var(--mono); color: var(--dim); }
+body.menu .sep { height: 1px; background: var(--bd); margin: 5px 4px; }
+body.menu button { font: inherit; color: var(--fg); }
+body.menu .it { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: 0; border-radius: 6px; background: none; text-align: left; }
+body.menu .it:hover { background: var(--hov); }
+body.menu .it svg { width: 16px; height: 16px; flex: none; color: var(--dim); }
+body.menu .it .sw { margin-left: auto; }
+body.menu .sw { width: 28px; height: 16px; border-radius: 8px; background: var(--bd2); position: relative; flex: none; transition: background .15s; }
+body.menu .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--sbg); transition: left .15s; }
+body.menu .sw.on { background: var(--hi); }
+body.menu .sw.on::after { left: 14px; }
+body.menu .it.ex, body.menu .it.ex svg { color: var(--danger, #ff8080); }
+
+/* ---------- badge pictures and 7TV paints ---------- */
+.msg .bi { height: 1.15em; width: auto; flex: none; border-radius: 2px; }
+/* A paint is the name's own fill: the text is transparent over it; its shadows come from the paint (filter). */
+.msg .nm.painted { color: transparent; -webkit-background-clip: text; background-clip: text; background-size: 100% 100%; text-shadow: none; }
+.msg .nm.painted.pimg { background-size: cover; background-position: center; }
+
+/* ---------- alerts source (/obs?alerts): one event at a time ---------- */
+body.alerts #list { justify-content: center; }
+body.alerts .msg.alert { animation: pop .35s cubic-bezier(.2, .9, .3, 1.2) both; box-shadow: 0 0 0 2px var(--c), 0 10px 30px rgba(0, 0, 0, .45); }
+body.alerts.al-bar #list { justify-content: flex-start; }
+.abar { display: flex; align-items: center; gap: .6em; padding: .55em .9em; color: var(--fg); font-family: var(--ftext);
+  background: color-mix(in srgb, var(--cardc, #121212) 92%, transparent); border-left: 4px solid var(--c); text-shadow: 0 1px 2px rgba(0, 0, 0, .7);
+  animation: drop .45s cubic-bezier(.2, .9, .3, 1.1) both; transition: opacity .6s, transform .6s; }
+.abar b { color: var(--c); font: 600 1em var(--fname); }
+.abar .aam { flex: none; white-space: nowrap; font: 600 .9em var(--fname); text-transform: uppercase; letter-spacing: .03em; }
+.abar b { flex: none; white-space: nowrap; }
+.abar .atx { flex: 1; min-width: 0; text-align: right; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.abar.gone { opacity: 0; transform: translateY(-30%); }
+@keyframes pop { from { opacity: 0; transform: scale(.88); } }
+@keyframes drop { from { opacity: 0; transform: translateY(-110%); } }
+
+/* Dock: the person filter bar and messages a moderator removed. */
+body.dock #who { display: flex; align-items: center; justify-content: space-between; padding: 5px 10px; background: var(--sel); font-size: 12px; }
+body.dock #who[hidden] { display: none; }
+body.dock #who button { padding: 1px 7px; font-size: 11px; }
+body.dock .m .n { cursor: pointer; }
+body.dock .m .n:hover { text-decoration: underline; }
+body.dock .m.del .x, body.dock .m.del .n { text-decoration: line-through; opacity: .55; }
+body.dock .m .delnote { margin-left: 6px; font-size: 11px; color: var(--caution, #c99a45); }

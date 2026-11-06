@@ -76,6 +76,8 @@ fn page(name: &str) -> Option<(Vec<u8>, &'static str)> {
             "overlay.html" => include_bytes!("../web/overlay.html"),
             "dock.html" => include_bytes!("../web/dock.html"),
             "dock.js" => include_bytes!("../web/dock.js"),
+            "menu.html" => include_bytes!("../web/menu.html"),
+            "menu.js" => include_bytes!("../web/menu.js"),
             "settings.html" => include_bytes!("../web/settings.html"),
             "style.css" => include_bytes!("../web/style.css"),
             "common.js" => include_bytes!("../web/common.js"),
@@ -134,6 +136,8 @@ fn handle(mut s: TcpStream) -> std::io::Result<()> {
         "/" | "/overlay" | "/obs" => serve(&mut s, "overlay.html"),
         "/settings" => serve(&mut s, "settings.html"),
         "/dock" => serve(&mut s, "dock.html"),
+        "/menu" => serve(&mut s, "menu.html"),
+        "/api/status" => respond(&mut s, "200 OK", "application/json; charset=utf-8", crate::api::status().as_bytes()),
         "/api/events" => crate::api::sse(s),
         "/api/ws" if !ws_key.is_empty() => crate::api::websocket(s, &ws_key, trusted),
         "/api/recent" => respond(&mut s, "200 OK", "application/json; charset=utf-8", crate::api::recent().as_bytes()),
@@ -255,8 +259,15 @@ fn decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// YouTube only: the page reads live chat through here (no CORS, consent cookie set).
+/// YouTube (the page reads live chat through here: no CORS, consent cookie set) and the Kick channel lookup.
 fn proxy(method: &str, url: &str, body: &[u8]) -> Result<(u16, Vec<u8>), String> {
+    // Kick: only the channel lookup (chatroom id), for when the page can't reach it itself.
+    if let Some(slug) = url.strip_prefix("https://kick.com/api/v2/channels/") {
+        if slug.is_empty() || !slug.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-') {
+            return Err("bad channel".into());
+        }
+        return request("GET", "kick.com", &format!("/api/v2/channels/{slug}"), "Accept: application/json\r\n", b"");
+    }
     let rest = url.strip_prefix("https://www.youtube.com/").ok_or("host not allowed")?;
     let path = format!("/{rest}");
     let mut headers = String::from("Accept-Language: uk-UA,uk;q=0.9,en;q=0.8\r\nCookie: SOCS=CAI; CONSENT=YES+cb\r\n");

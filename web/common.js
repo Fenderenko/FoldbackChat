@@ -1,13 +1,15 @@
 // Shared by the overlay and the settings page: settings store, language, Twitch (anonymous IRC), YouTube (live
-// chat through the host's /proxy), 7TV / BTTV / FFZ emotes, name palettes, sounds, relay to the OBS scenes.
+// chat through the host's /proxy), Kick (public Pusher feed), 7TV / BTTV / FFZ emotes, name palettes, sounds, relay
+// to the OBS scenes.
 (() => {
   const FC = (window.FC = {});
   const KEY = 'fc.settings.v1';
 
   FC.DEF = {
-    twitch: '', twitchOn: true, youtube: '', ytOn: true, lang: 'auto',
+    twitch: '', twitchOn: true, youtube: '', ytOn: true, kick: '', kickOn: true, lang: 'auto',
     // Look
-    style: 'cards', font: 17, emoteSize: 1.6, letter: true, showPlatform: true, showTime: false, showBadges: true,
+    // badgeStyle: 'img' — the platforms' own badge pictures (Twitch), 'text' — short words; stv: 7TV paints and badges
+    style: 'cards', font: 17, emoteSize: 1.6, letter: true, showPlatform: true, showTime: false, showBadges: true, badgeStyle: 'img', stv: true,
     fontName: 'plex', fontText: 'plex', fontNameOwn: '', fontTextOwn: '', nameUpper: true, nameWeight: 500, textWeight: 400, outline: 0.6,
     accent: '#e8e8e8', text: '#ececec',
     // Name colours: 'brand' = from the palette, 'twitch' = the viewer's Twitch colour, 'mono' = accent
@@ -15,13 +17,15 @@
     // Background: transparency 0 = solid, 1 = fully transparent
     cardColor: '#121212', cardT: 0.18, panelColor: '#121212', panelT: 1, cardRadius: 0, gap: 6,
     // Top line
-    showHeader: true, hdrTw: true, hdrYt: true, hdrViewers: true, hdrUptime: true, hdrClock: false,
+    showHeader: true, hdrTw: true, hdrYt: true, hdrKk: true, hdrViewers: true, hdrUptime: true, hdrClock: false,
     hdrSize: 13, hdrColor: '#e6e6e6', hdrT: 0.45,
     // Messages
     // idleHide: the whole chat hides after that many quiet seconds and comes back with a new message (0 — never)
     maxMsgs: 12, fade: 0, idleHide: 0, newestTop: false,
     // Featured message (the /obs?featured source): seconds on screen (0 — until taken off), size against the chat
-    featSec: 10, featScale: 1.4, hideBots: true, hideCommands: false, hideLinks: false, showReplies: true,
+    featSec: 10, featScale: 1.4,
+    // Alerts (the /obs?alerts source): 'card' in the middle or 'bar' from the top, seconds each
+    alertStyle: 'card', alertSec: 6, hideBots: true, hideCommands: false, hideLinks: false, showReplies: true,
     bots: 'streamelements, nightbot, moobot, streamlabs, soundalerts, sery_bot, wizebot, fossabot, commanderroot',
     ignore: '',
     // Highlights
@@ -32,7 +36,7 @@
     e7tv: true, eBttv: true, eFfz: true,
     // Sounds: per event — sound name ('off' | built-in | 'custom') and volume
     volume: 0.6, cooldown: 2, quietOwn: true,
-    snd: { msg: 'kalimba', first: 'bell', mention: 'drop', event: 'fanfare' },
+    snd: { msg: 'kalimba', first: 'bell', mention: 'ping', event: 'arp' },
     vol: { msg: 0.5, first: 0.8, mention: 0.9, event: 0.8 },
     // Scenes
     relay: true,
@@ -50,7 +54,10 @@
       s.theme = 2;
       try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* full */ }
     }
-    return { ...FC.DEF, ...s, snd: { ...FC.DEF.snd, ...(s.snd || {}) }, vol: { ...FC.DEF.vol, ...(s.vol || {}) } };
+    const out = { ...FC.DEF, ...s, snd: { ...FC.DEF.snd, ...(s.snd || {}) }, vol: { ...FC.DEF.vol, ...(s.vol || {}) } };
+    // Sounds that are gone (0.1.5 dropped the harsh ones) fall back to the defaults.
+    for (const ev of Object.keys(out.snd)) if (!['off', 'custom'].includes(out.snd[ev]) && FC.SOUNDS && !FC.SOUNDS[out.snd[ev]]) out.snd[ev] = FC.DEF.snd[ev];
+    return out;
   };
   FC.s = FC.load();
   const changeSubs = [];
@@ -236,16 +243,24 @@
     }
     await Promise.all(jobs);
   };
-  // Third-party emotes inside plain text parts.
-  const withEmotes = (parts) => {
-    if (!EMO.size) return parts;
+  // Kick's channel 7TV set (7TV keeps Kick channels apart from Twitch ones); the global set is in EMO.
+  const KEMO = new Map();
+  FC.loadKickEmotes = async (userId) => {
+    KEMO.clear();
+    if (!userId || !FC.s.e7tv) return;
+    const d = await j(`https://7tv.io/v3/users/kick/${userId}`);
+    (d?.emote_set?.emotes || []).forEach((e) => KEMO.set(e.name, `https://cdn.7tv.app/emote/${e.id}/2x.webp`));
+  };
+  // Third-party emotes inside plain text parts; Kick messages look in the Kick set first.
+  const withEmotes = (parts, kick) => {
+    if (!EMO.size && !(kick && KEMO.size)) return parts;
     const out = [];
     for (const p of parts) {
       if (p.img) { out.push(p); continue; }
       const words = p.t.split(/(\s+)/);
       let buf = '';
       for (const w of words) {
-        const u = EMO.get(w);
+        const u = (kick && KEMO.get(w)) || EMO.get(w);
         if (u) { if (buf) out.push({ t: buf }); buf = ''; out.push({ img: u, alt: w }); } else buf += w;
       }
       if (buf) out.push({ t: buf });
@@ -266,7 +281,7 @@
       if (s.hideCommands && /^\s*!/.test(m.text)) return;
       if (s.hideLinks && /https?:\/\/|www\./i.test(m.text)) return;
     }
-    m.parts = withEmotes(m.parts || [{ t: m.text || '' }]);
+    m.parts = withEmotes(m.parts || [{ t: m.text || '' }], m.platform === 'kk');
     const low = (m.text || '').toLowerCase();
     m.mention = m.kind === 'chat' && [...(list(s.mentions).length ? list(s.mentions) : list(s.twitch)), ...list(s.hlWords)].some((w) => w && low.includes(w));
     m.own = !!m.own;
@@ -275,22 +290,74 @@
 
   // ---------- local API (docs/API.md) ----------
   // A message as the API gives it out, and back: the dock and the featured source draw what the API sends.
-  const PF = { tw: 'twitch', yt: 'youtube' };
+  const PF = { tw: 'twitch', yt: 'youtube', kk: 'kick' };
   FC.apiMsg = (m) => ({
     type: 'message', id: m.id || '', platform: PF[m.platform] || m.platform || '', kind: m.kind || 'chat',
-    user: { login: m.login || '', name: m.name || '', color: m.color || '', badges: m.badges || {} },
+    user: { login: m.login || '', name: m.name || '', color: m.color || '', id: m.uid || '', badges: m.badges || {}, badgeTags: m.badgeTags || '', badgeImgs: m.badgeImgs || [] },
     text: m.text || '', parts: (m.parts || []).map((p) => (p.img ? { emote: p.img, alt: p.alt || '' } : { text: p.t || '' })),
     amount: m.amount || '', first: !!m.first, mention: !!m.mention, own: !!m.own, reply: m.reply || null,
     highlighted: !!m.highlighted, reward: !!m.reward, time: m.at || Date.now(),
   });
   FC.fromApi = (a) => ({
-    platform: a.platform === 'youtube' ? 'yt' : 'tw', kind: a.kind || 'chat', id: a.id || '', login: a.user?.login || '', name: a.user?.name || '',
-    color: a.user?.color || '', badges: a.user?.badges || {}, text: a.text || '',
+    platform: { youtube: 'yt', kick: 'kk' }[a.platform] || 'tw', kind: a.kind || 'chat', id: a.id || '', login: a.user?.login || '', name: a.user?.name || '',
+    color: a.user?.color || '', uid: a.user?.id || '', badges: a.user?.badges || {}, badgeTags: a.user?.badgeTags || '', badgeImgs: a.user?.badgeImgs || [], text: a.text || '',
     parts: (a.parts || [{ text: a.text || '' }]).map((p) => (p.emote ? { img: p.emote, alt: p.alt || '' } : { t: p.text || '' })),
     amount: a.amount || '', first: !!a.first, mention: !!a.mention, own: !!a.own, reply: a.reply || null,
     highlighted: !!a.highlighted, reward: !!a.reward, at: a.time || Date.now(),
   });
   FC.apiPush = (q, obj) => fetch('/api/push?' + q, { method: 'POST', body: JSON.stringify(obj) }).catch(() => {});
+
+  // ---------- badge pictures (Twitch, through ivr.fi: global and the channel's own) and 7TV paints / badges ----------
+  const BADGES = { global: null, chan: '', set: new Map() };
+  const badgeSets = (list, into) => (Array.isArray(list) ? list : []).forEach((b) => (b.versions || []).forEach((v) => into.set(b.set_id + '/' + v.id, { src: v.image_url_2x, title: v.title || b.set_id })));
+  FC.loadBadges = async (channel) => {
+    if (!BADGES.global) { BADGES.global = new Map(); badgeSets(await j('https://api.ivr.fi/v2/twitch/badges/global'), BADGES.global); }
+    if (channel && channel !== BADGES.chan) { BADGES.chan = channel; BADGES.set = new Map(); badgeSets(await j('https://api.ivr.fi/v2/twitch/badges/channel?login=' + encodeURIComponent(channel)), BADGES.set); }
+  };
+  // The pictures of a message's badges: Twitch from its badge tags ("moderator/1,subscriber/12"), YouTube's member badge.
+  FC.badgeImgs = (m) => {
+    if (m.badgeImgs?.length) return m.badgeImgs;
+    return String(m.badgeTags || '').split(',').filter(Boolean).map((k) => BADGES.set.get(k) || BADGES.global?.get(k)).filter(Boolean);
+  };
+  // 7TV: a person's paint (a gradient or a picture for the name) and badge, by platform user id; cached, 404 — none.
+  const STV = new Map(), STV_COS = new Map();
+  const rgba = (c) => { c >>>= 0; return `rgba(${c >>> 24},${(c >>> 16) & 255},${(c >>> 8) & 255},${((c & 255) / 255).toFixed(3)})`; };
+  const paintCss = (p) => {
+    const stops = (p.stops || []).map((x) => `${rgba(x.color)} ${(x.at * 100).toFixed(1)}%`).join(', ');
+    const image = p.function === 'URL' ? `url("${p.image_url}")`
+      : p.function === 'RADIAL_GRADIENT' ? `${p.repeat ? 'repeating-' : ''}radial-gradient(${p.shape || 'circle'}, ${stops})`
+        : `${p.repeat ? 'repeating-' : ''}linear-gradient(${p.angle || 0}deg, ${stops})`;
+    const filter = (p.shadows || []).map((x) => `drop-shadow(${x.x_offset}px ${x.y_offset}px ${x.radius}px ${rgba(x.color)})`).join(' ');
+    return { image, filter, url: p.function === 'URL' };
+  };
+  async function cosmetics(ids) {
+    const need = ids.filter((id) => id && !STV_COS.has(id));
+    if (need.length) {
+      try {
+        const q = 'query($l:[ObjectID!]){cosmetics(list:$l){paints{id function color angle shape image_url repeat stops{at color} shadows{x_offset y_offset radius color}} badges{id tooltip host{url}}}}';
+        const r = await fetch('https://7tv.io/v3/gql', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q, variables: { l: need } }) }).then((x) => x.json());
+        for (const p of r?.data?.cosmetics?.paints || []) STV_COS.set(p.id, { paint: paintCss(p) });
+        for (const b of r?.data?.cosmetics?.badges || []) STV_COS.set(b.id, { badge: { src: 'https:' + b.host.url + '/2x.webp', title: b.tooltip || '7TV' } });
+      } catch { /* 7TV unavailable */ }
+      for (const id of need) if (!STV_COS.has(id)) STV_COS.set(id, {});
+    }
+    return ids.map((id) => STV_COS.get(id) || {});
+  }
+  const STV_PF = { tw: 'twitch', yt: 'youtube', kk: 'kick' };
+  FC.stv = (m) => {
+    const key = (m.platform || '') + ':' + (m.uid || '');
+    if (!m.uid || !STV_PF[m.platform]) return Promise.resolve({});
+    if (!STV.has(key)) {
+      STV.set(key, (async () => {
+        const u = await j(`https://7tv.io/v3/users/${STV_PF[m.platform]}/${encodeURIComponent(m.uid)}`);
+        const st = u?.user?.style || {};
+        const [p, b] = await cosmetics([st.paint_id, st.badge_id]);
+        return { paint: p?.paint || null, badge: b?.badge || null };
+      })());
+      if (STV.size > 3000) STV.delete(STV.keys().next().value);
+    }
+    return STV.get(key);
+  };
 
   // ---------- Twitch (anonymous, read-only IRC) ----------
   const unesc = (v) => v.replace(/\\(.)/g, (x, c) => (c === 's' ? ' ' : c === ':' ? ';' : c === 'r' ? '\r' : c === 'n' ? '\n' : c));
@@ -312,7 +379,7 @@
     if (i < cps.length) out.push({ t: cps.slice(i).join('') });
     return out;
   }
-  FC.status = { tw: 'off', yt: 'off' };
+  FC.status = { tw: 'off', yt: 'off', kk: 'off' };
   const statusSubs = [];
   FC.onStatus = (f) => statusSubs.push(f);
   const setStatus = (k, v, note = '') => {
@@ -343,13 +410,13 @@
       ws.onclose = () => { clearTimeout(joined); if (dead) return; setStatus('tw', 'wait', 'перепідключення'); timer = setTimeout(connect, backoff); backoff = Math.min(backoff * 2, 30000); };
       ws.onerror = () => ws.close();
     };
-    const user = (m) => { const login = m.tags.login || m.prefix.split('!')[0] || ''; return { login, name: m.tags['display-name'] || login, color: m.tags.color || '' }; };
+    const user = (m) => { const login = m.tags.login || m.prefix.split('!')[0] || ''; return { login, name: m.tags['display-name'] || login, color: m.tags.color || '', uid: m.tags['user-id'] || '', badgeTags: m.tags.badges || '' }; };
     const handle = (m) => {
       const t = m.tags;
       switch (m.command) {
         case 'PING': ws.send('PONG :' + (m.trailing || 'tmi.twitch.tv')); break;
         case 'RECONNECT': ws.close(); break;
-        case 'ROOMSTATE': setStatus('tw', 'live', '#' + channel); FC.roomId = t['room-id']; FC.loadEmotes(t['room-id']); break;
+        case 'ROOMSTATE': setStatus('tw', 'live', '#' + channel); FC.roomId = t['room-id']; FC.loadEmotes(t['room-id']); FC.loadBadges(channel); break;
         case 'PRIVMSG': {
           let text = m.trailing || '';
           if (text.startsWith('\x01ACTION ')) text = text.slice(8).replace(/\x01$/, '');
@@ -448,12 +515,15 @@
         seen.add(r.id);
         if (first) continue; // backlog when the chat opens: not replayed
         const tips = (r.authorBadges || []).map((b) => b.liveChatAuthorBadgeRenderer?.tooltip || '').join(' ').toLowerCase();
+        // A channel member's badge is a picture of the channel's own (customThumbnail).
+        const memberImg = (r.authorBadges || []).map((b) => b.liveChatAuthorBadgeRenderer?.customThumbnail?.thumbnails?.slice(-1)[0]?.url).find(Boolean) || '';
         const kind = it.liveChatTextMessageRenderer ? 'chat' : it.liveChatMembershipItemRenderer ? 'member' : 'superchat';
         const runs = r.message?.runs || r.headerSubtext?.runs || [];
         FC.emit({
           platform: 'yt', kind, id: r.id, login: r.authorExternalChannelId || r.authorName?.simpleText, name: (r.authorName?.simpleText || 'YouTube').replace(/^@/, ''),
           text: runsText(runs), parts: runsParts(runs),
           badges: { owner: /owner|власник/.test(tips), mod: /moderator|модератор/.test(tips), member: /member|спонсор|учасник/.test(tips), vip: false, sub: false },
+          uid: r.authorExternalChannelId || '', badgeImgs: memberImg ? [{ src: memberImg, title: FC.t('спонсор') }] : [],
           amount: r.purchaseAmountText?.simpleText || (kind === 'member' ? FC.t('спонсорство') : ''),
         });
       }
@@ -465,6 +535,111 @@
     }
     find();
     yt = { stop: () => { stop = true; clearTimeout(timer); setStatus('yt', 'off'); } };
+  };
+
+  // ---------- Kick (the public Pusher feed of the site's own chat, read-only, no login) ----------
+  // Off for now (FC.KICK): the public key answers "not in this cluster" since 11.2026, and Kick's own pages now take
+  // their connection from an internal API. The settings, the dock and the overlay show nothing of Kick while off.
+  FC.KICK = false;
+  // The chatroom id is in the channel's data (kick.com/api/v2/channels/<slug>): read by the page itself, or through
+  // the host when Kick refuses the page.
+  // Kick has moved its public Pusher key between clusters ("not in this cluster", 4001): the known key / cluster pairs
+  // are tried in turn and the one that worked is remembered.
+  const KICK_APPS = [['32cbd69e4b950bf97679', 'us2'], ['32cbd69e4b950bf97679', 'mt1'], ['32cbd69e4b950bf97679', 'us3'], ['32cbd69e4b950bf97679', 'eu'],
+    ['eb1d5f283081a78b932c', 'us2'], ['eb1d5f283081a78b932c', 'mt1']];
+  let kickApp = 0;
+  try { kickApp = Math.min(KICK_APPS.length - 1, +localStorage.getItem('fc.kickApp') || 0); } catch { /* storage unavailable */ }
+  const kickWs = () => { const [key, cl] = KICK_APPS[kickApp]; return `wss://ws-${cl}.pusher.com/app/${key}?protocol=7&client=js&version=8.4.0&flash=false`; };
+  // "[emote:37226:KEKW]" in the text is a Kick emote.
+  const kickParts = (text) => {
+    const out = [];
+    let i = 0;
+    for (const m of text.matchAll(/\[emote:(\d+):([^\]]*)\]/g)) {
+      if (m.index > i) out.push({ t: text.slice(i, m.index) });
+      out.push({ img: `https://files.kick.com/emotes/${m[1]}/fullsize`, alt: m[2] });
+      i = m.index + m[0].length;
+    }
+    if (i < text.length) out.push({ t: text.slice(i) });
+    return out;
+  };
+  const kickText = (text) => String(text || '').replace(/\[emote:\d+:([^\]]*)\]/g, '$1');
+  async function kickChannel(slug) {
+    const url = `https://kick.com/api/v2/channels/${encodeURIComponent(slug)}`;
+    for (const get of [() => fetch(url), () => fetch('/proxy?u=' + encodeURIComponent(url))]) {
+      try {
+        const r = await get();
+        if (r.status === 404) return null;
+        if (r.ok) { const d = await r.json(); if (d?.chatroom?.id) return d; }
+      } catch { /* the next way */ }
+    }
+    throw new Error('lookup');
+  }
+
+  let kk = null;
+  FC.kick = (channel) => {
+    if (kk) { kk.close(); kk = null; }
+    channel = String(channel || '').trim().toLowerCase().replace(/^https?:\/\/(www\.)?kick\.com\//, '').replace(/^@/, '').split(/[/?#]/)[0];
+    if (!channel || !FC.s.kickOn) { setStatus('kk', 'off'); return; }
+    let ws, dead = false, timer, backoff = 1000, room = 0;
+    const own = channel;
+    const lookup = async () => {
+      setStatus('kk', 'wait');
+      let d;
+      try { d = await kickChannel(channel); } catch { if (!dead) { setStatus('kk', 'error', 'немає зв’язку'); timer = setTimeout(lookup, 30e3); } return; }
+      if (dead) return;
+      if (!d) { setStatus('kk', 'error', 'канал не знайдено'); return; }
+      room = d.chatroom.id;
+      FC.loadKickEmotes(d.user_id);
+      connect();
+    };
+    const connect = () => {
+      ws = new WebSocket(kickWs());
+      ws.onmessage = (e) => { try { handle(JSON.parse(e.data)); } catch { /* not JSON */ } };
+      ws.onclose = (e) => {
+        if (dead) return;
+        // A key / cluster Kick doesn't serve (4000–4099 are Pusher's "don't retry" codes): the next pair, at once.
+        if (e.code >= 4000 && e.code < 4100 && kickApp < KICK_APPS.length - 1) { kickApp++; connect(); return; }
+        setStatus('kk', 'wait', 'перепідключення'); timer = setTimeout(connect, backoff); backoff = Math.min(backoff * 2, 30000);
+      };
+      ws.onerror = () => ws.close();
+    };
+    // Pusher sends each event's data as a JSON string.
+    const data = (m) => { try { return typeof m.data === 'string' ? JSON.parse(m.data) : m.data || {}; } catch { return {}; } };
+    const emit = (kind, d, login, amount, text = '') => FC.emit({ platform: 'kk', kind, id: 'kk' + kind + Date.now(), login, name: login || 'Kick', text, parts: [{ t: text }], amount, badges: {} });
+    const handle = (m) => {
+      const ev = m.event || '', d = data(m);
+      switch (ev) {
+        case 'pusher:connection_established': backoff = 1000; ws.send(JSON.stringify({ event: 'pusher:subscribe', data: { auth: '', channel: `chatrooms.${room}.v2` } })); break;
+        case 'pusher:ping': ws.send(JSON.stringify({ event: 'pusher:pong', data: {} })); break;
+        case 'pusher_internal:subscription_succeeded':
+          setStatus('kk', 'live', channel);
+          try { localStorage.setItem('fc.kickApp', kickApp); } catch { /* storage unavailable */ }
+          break;
+        case 'App\\Events\\ChatMessageEvent': {
+          const s = d.sender || {}, idn = s.identity || {}, bd = (idn.badges || []).map((b) => b.type), login = s.slug || s.username || '';
+          const meta = d.metadata || {};
+          const reply = d.type === 'reply' && meta.original_sender ? { name: meta.original_sender.username || '', text: kickText(meta.original_message?.content) } : null;
+          FC.emit({
+            platform: 'kk', kind: 'chat', id: d.id, login, name: s.username || login, color: idn.color || '', uid: String(s.id || ''), text: kickText(d.content), parts: kickParts(String(d.content || '')), reply,
+            own: login.toLowerCase() === own,
+            badges: { owner: bd.includes('broadcaster'), mod: bd.includes('moderator'), vip: bd.includes('vip') || bd.includes('og'), sub: bd.includes('subscriber') || bd.includes('founder') },
+          });
+          break;
+        }
+        case 'App\\Events\\MessageDeletedEvent': if (FC.onClear) FC.onClear({ id: d.message?.id }); break;
+        case 'App\\Events\\UserBannedEvent': if (FC.onClear) FC.onClear({ login: d.user?.slug || d.user?.username || '' }); break;
+        case 'App\\Events\\ChatroomClearEvent': if (FC.onClear) FC.onClear({}); break;
+        case 'App\\Events\\SubscriptionEvent': emit('sub', d, d.username || '', d.months > 1 ? FC.t('підписка · {n} міс.', { n: d.months }) : FC.t('нова підписка')); break;
+        case 'App\\Events\\GiftedSubscriptionsEvent': {
+          const to = d.gifted_usernames || [];
+          emit('sub', d, d.gifter_username || '', to.length > 1 ? FC.t('дарує {n} підписок', { n: to.length }) : FC.t('дарує підписку {name}', { name: to[0] || '' }));
+          break;
+        }
+        case 'App\\Events\\StreamHostEvent': emit('raid', d, d.host_username || '', FC.t('рейд · {n} глядачів', { n: d.number_viewers || 0 }), d.optional_message || ''); break;
+      }
+    };
+    lookup();
+    kk = { close: () => { dead = true; clearTimeout(timer); try { if (ws) ws.close(); } catch { /* closed */ } setStatus('kk', 'off'); } };
   };
 
   // ---------- sounds ----------
@@ -486,14 +661,69 @@
     plex: ['IBM Plex Mono', 'Моноширинний (Plex)'], jet: ['JetBrains Mono', 'JetBrains Mono'], inter: ['Inter', 'Inter'], onest: ['Onest', 'Onest'],
     geo: ['Geologica', 'Geologica'], oswald: ['Oswald', 'Oswald (вузький)'], roboto: ['Roboto Condensed', 'Roboto Condensed'], system: ['Segoe UI', 'Як у Windows'], own: ['', 'Свій шрифт…'],
   };
+  // The new voices: FM bells, marimba, plucks and bubbles through a short room (a generated reverb), so they don't
+  // sound like bare oscillators. k scales them to the volume the old tones had at the same setting.
+  let room = null;
+  const out = () => {
+    ac = ac || new AudioContext();
+    if (!room) {
+      const len = ac.sampleRate * 1.6, buf = ac.createBuffer(2, len, ac.sampleRate);
+      for (let c = 0; c < 2; c++) { const d = buf.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 3; }
+      const rev = ac.createConvolver(), wet = ac.createGain();
+      rev.buffer = buf; wet.gain.value = 0.22;
+      rev.connect(wet).connect(ac.destination);
+      room = rev;
+    }
+    return ac;
+  };
+  const env = (g, t, a, peak, dur) => { g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); };
+  const send = (node) => { node.connect(ac.destination); node.connect(room); };
+  const fm = (k, f, t, { ratio = 1, index = 2, dur = 1.2, vol = 0.3, idxDecay = 0.4 } = {}) => {
+    const c = ac.createOscillator(), m = ac.createOscillator(), mg = ac.createGain(), g = ac.createGain();
+    c.frequency.value = f; m.frequency.value = f * ratio;
+    mg.gain.setValueAtTime(f * index, t); mg.gain.exponentialRampToValueAtTime(f * 0.01, t + idxDecay);
+    m.connect(mg).connect(c.frequency); env(g, t, 0.005, vol * k, dur); c.connect(g); send(g);
+    c.start(t); m.start(t); c.stop(t + dur + 0.1); m.stop(t + dur + 0.1);
+  };
+  const mar = (k, f, t, { dur = 0.6, vol = 0.35 } = {}) => {
+    const o = ac.createOscillator(), o2 = ac.createOscillator(), g = ac.createGain(), g2 = ac.createGain(), lp = ac.createBiquadFilter();
+    o.frequency.value = f; o2.frequency.value = f * 4; lp.type = 'lowpass'; lp.frequency.value = f * 6;
+    env(g, t, 0.004, vol * k, dur); env(g2, t, 0.002, vol * k * 0.25, 0.08);
+    o.connect(g); o2.connect(g2); g.connect(lp); g2.connect(lp); send(lp);
+    o.start(t); o2.start(t); o.stop(t + dur + 0.1); o2.stop(t + 0.2);
+  };
+  const pluck = (k, f, t, { dur = 0.5, vol = 0.35 } = {}) => {
+    const o = ac.createOscillator(), g = ac.createGain(), lp = ac.createBiquadFilter();
+    o.type = 'triangle'; o.frequency.value = f; lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(f * 8, t); lp.frequency.exponentialRampToValueAtTime(f * 1.2, t + dur * 0.6);
+    env(g, t, 0.003, vol * k, dur); o.connect(lp).connect(g); send(g); o.start(t); o.stop(t + dur + 0.1);
+  };
+  const bubble = (k, t, { from = 380, to = 900, dur = 0.18, vol = 0.35 } = {}) => {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.setValueAtTime(from, t); o.frequency.exponentialRampToValueAtTime(to, t + dur);
+    env(g, t, 0.004, vol * k, dur + 0.05); o.connect(g); send(g); o.start(t); o.stop(t + dur + 0.1);
+  };
+  // (v) => play at volume v: the voice gets the context, its loudness k and the start time.
+  const voice = (f) => (v) => { out(); f(v / 0.3 * 0.8, ac.currentTime + 0.03); };
   FC.SOUNDS = {
     kalimba: { name: 'Калімба', play: (v) => tone([1319, 1760], 'sine', 0.11, 1.1, v) },
     bell: { name: 'Дзвіночок', play: (v) => tone([988, 1319, 1760], 'sine', 0.1, 1.4, v) },
-    drop: { name: 'Крапля', play: (v) => tone([1760, 2349], 'triangle', 0.06, 0.5, v) },
-    pop: { name: 'Клац', play: (v) => tone([660], 'square', 0, 0.12, v * 0.35) },
-    soft: { name: 'М’яка нота', play: (v) => tone([784], 'sine', 0, 1.6, v) },
-    fanfare: { name: 'Фанфари', play: (v) => tone([784, 988, 1175, 1568], 'triangle', 0.09, 1.0, v) },
+    marimba: { name: 'Маримба', play: voice((k, t) => mar(k, 880, t)) },
+    bubble: { name: 'Бульбашка', play: voice((k, t) => bubble(k, t)) },
+    pluck: { name: 'Тихий плак', play: voice((k, t) => pluck(k, 659, t, { dur: 0.35, vol: 0.3 })) },
+    glass: { name: 'Скло', play: voice((k, t) => fm(k, 1568, t, { ratio: 3.5, index: 1.2, dur: 0.7, vol: 0.12, idxDecay: 0.15 })) },
+    twoup: { name: 'Два тони вгору', play: voice((k, t) => { mar(k, 784, t); mar(k, 1175, t + 0.11); }) },
+    chord: { name: 'Теплий акорд', play: voice((k, t) => [523, 659, 784].forEach((f, i) => fm(k, f, t + i * 0.05, { ratio: 1, index: 0.8, dur: 1.3, vol: 0.12, idxDecay: 0.6 }))) },
+    glassbell: { name: 'Дзвоник-скло', play: voice((k, t) => { fm(k, 1319, t, { ratio: 3.5, index: 1.6, dur: 1.2, vol: 0.14 }); fm(k, 1976, t + 0.12, { ratio: 3.5, index: 1.4, dur: 1.2, vol: 0.1 }); }) },
+    ping: { name: 'Пінг', play: voice((k, t) => fm(k, 1760, t, { ratio: 2, index: 1, dur: 0.9, vol: 0.16, idxDecay: 0.2 })) },
+    dclick: { name: 'Подвійний клік', play: voice((k, t) => { pluck(k, 988, t, { dur: 0.18 }); pluck(k, 1319, t + 0.09, { dur: 0.25 }); }) },
+    dropup: { name: 'Крапля вгору', play: voice((k, t) => { bubble(k, t, { from: 600, to: 1500, dur: 0.14, vol: 0.3 }); mar(k, 1568, t + 0.12, { dur: 0.5, vol: 0.22 }); }) },
+    arp: { name: 'Маримба-арпеджіо', play: voice((k, t) => [523, 659, 784, 1047].forEach((f, i) => mar(k, f, t + i * 0.09, { dur: 0.8 }))) },
+    festive: { name: 'Святковий акорд', play: voice((k, t) => { [392, 494, 587, 784].forEach((f, i) => fm(k, f, t + i * 0.07, { ratio: 1, index: 1, dur: 1.6, vol: 0.11, idxDecay: 0.8 })); fm(k, 1568, t + 0.32, { ratio: 3.5, index: 1.5, dur: 1.4, vol: 0.1 }); }) },
+    cascade: { name: 'Скляний каскад', play: voice((k, t) => [1319, 1568, 1976, 2637].forEach((f, i) => fm(k, f, t + i * 0.08, { ratio: 3.5, index: 1.3, dur: 1.1, vol: 0.09 }))) },
   };
+  // The first load ran before the sound list existed: once more, so sounds that are gone fall back.
+  FC.s = FC.load();
   const audioEls = {};
   FC.play = (event, force) => {
     const s = FC.s, name = s.snd[event], v = (s.vol[event] ?? 0.6) * s.volume;

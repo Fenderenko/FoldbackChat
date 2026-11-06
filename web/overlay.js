@@ -2,18 +2,21 @@
 // Messages are kept in a short history and the list is rebuilt from it on every settings change, so
 // options apply to messages already on screen and a larger "how many" brings hidden ones back.
 // At /obs the same page is an OBS browser source: always locked, silent, no relay; settings and test
-// messages come from the host over /events. /obs?featured shows only the featured message (from /api/events).
+// messages come from the host over /events. /obs?featured shows only the featured message, /obs?alerts the events
+// (subs, raids, bits, Super Chats) one at a time with their sound — both from /api/events.
 // The in-app window is the source of the local API: every message, deletion and state goes to /api/push.
 (() => {
   const list = document.getElementById('list'), head = document.getElementById('head'), hint = document.getElementById('hint'), more = document.getElementById('more');
   const params = new URLSearchParams(location.search);
   const OBS = location.pathname === '/obs' || params.has('obs');
-  const FEAT = OBS && params.has('featured');
+  const FEAT = OBS && params.has('featured'), ALERTS = OBS && params.has('alerts');
   document.body.classList.toggle('obs', OBS);
-  document.body.classList.toggle('feat', FEAT);
+  document.body.classList.toggle('feat', FEAT || ALERTS);
+  document.body.classList.toggle('alerts', ALERTS);
   const ICON = {
     tw: '<svg class="pf" viewBox="0 0 24 24"><path fill="#a970ff" d="M4 3 3 7v12h4v3h3l3-3h4l5-5V3H4Zm16 10-3 3h-4l-3 3v-3H6V5h14v8Z"/><path fill="#a970ff" d="M15 7h2v5h-2zM10 7h2v5h-2z"/></svg>',
     yt: '<svg class="pf" viewBox="0 0 24 24"><rect x="1.5" y="5" width="21" height="14" rx="4" fill="#ff3d3d"/><path fill="#fff" d="m10 9 5.2 3-5.2 3z"/></svg>',
+    kk: '<svg class="pf" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" fill="#53fc18"/><path fill="#0b0b0b" d="M7.5 6h3v4.2L13.8 6h3.6l-4 5.4 4.2 6.6h-3.7l-2.8-4.6-.6.8V18h-3z"/></svg>',
     // Channel points reward.
     pts: '<svg class="pf" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M12 8a4 4 0 0 1 4 4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
   };
@@ -52,6 +55,7 @@
     document.body.classList.toggle('noletter', !s.letter);
     document.body.classList.toggle('upper', !!s.nameUpper);
     document.body.classList.toggle('top', s.newestTop);
+    document.body.classList.toggle('al-bar', s.alertStyle === 'bar');
     for (const k of ['ring', 'glow', 'bar', 'tint']) document.body.classList.toggle('hl-' + k, (s.hlStyle || 'ring') === k);
     head.style.display = s.showHeader ? '' : 'none';
     renderAll();
@@ -72,14 +76,24 @@
     const top = document.createElement('div'); top.className = 'top';
     // The platform mark is always the first element of the line, so toggling it never shifts the rest.
     if (s.showPlatform) top.insertAdjacentHTML('beforeend', ICON[m.platform] || '');
+    // Badge pictures (as on Twitch) go before the name; platforms without pictures keep the words.
+    const imgs = s.showBadges && s.badgeStyle === 'img' ? FC.badgeImgs(m) : [];
+    for (const b of imgs) { const i = document.createElement('img'); i.className = 'bi'; i.src = b.src; i.alt = i.title = b.title; top.appendChild(i); }
     const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = m.name; top.appendChild(nm);
     if (m.reward && s.hlPoints) top.insertAdjacentHTML('beforeend', ICON.pts);
     const mark = FC.person(m)?.mark;
     if (mark) { const x = document.createElement('span'); x.className = 'bd'; x.textContent = mark; top.appendChild(x); }
     if (s.showBadges) {
-      const bd = m.badges || {};
-      const tags = [bd.owner && 'стрімер', bd.mod && s.hlMods && 'мод', bd.vip && 'vip', bd.member && 'спонсор', m.first && s.hlFirst && 'вперше'].filter(Boolean);
+      const bd = m.badges || {}, pics = imgs.length > 0;
+      const tags = [!pics && bd.owner && 'стрімер', !pics && bd.mod && s.hlMods && 'мод', !pics && bd.vip && 'vip', !pics && bd.member && 'спонсор', m.first && s.hlFirst && 'вперше'].filter(Boolean);
       for (const t of tags) { const x = document.createElement('span'); x.className = 'bd'; x.textContent = FC.t(t); top.appendChild(x); }
+    }
+    // 7TV: the person's paint on the name and their 7TV badge after it, once known (cached after the first look-up).
+    if (s.stv && s.e7tv && m.kind === 'chat' && !m.own) {
+      FC.stv(m).then(({ paint, badge }) => {
+        if (paint) { nm.classList.add('painted'); nm.style.backgroundImage = paint.image; nm.style.filter = paint.filter; nm.classList.toggle('pimg', paint.url); }
+        if (badge && s.showBadges) { const i = document.createElement('img'); i.className = 'bi'; i.src = badge.src; i.alt = i.title = badge.title; nm.after(i); }
+      });
     }
     if (s.showTime) { const t = document.createElement('span'); t.className = 't'; t.textContent = hhmm(new Date(m.at)); top.appendChild(t); }
     b.appendChild(top);
@@ -109,8 +123,8 @@
   function placeholder() {
     const s = FC.s, hk = host.hk?.[2];
     let txt = '';
-    if (!(s.twitchOn && s.twitch) && !(s.ytOn && s.youtube)) txt = !OBS && hk && hk !== '-' ? FC.t('Вкажи канал у налаштуваннях ({hk})', { hk }) : FC.t('Вкажи канал у налаштуваннях Foldback Chat');
-    else if (!OBS && (FC.status.tw === 'live' || FC.status.yt === 'live')) txt = FC.t('Підключено · чекаємо на повідомлення');
+    if (!(s.twitchOn && s.twitch) && !(s.ytOn && s.youtube) && !(s.kickOn && s.kick)) txt = !OBS && hk && hk !== '-' ? FC.t('Вкажи канал у налаштуваннях ({hk})', { hk }) : FC.t('Вкажи канал у налаштуваннях Foldback Chat');
+    else if (!OBS && (FC.status.tw === 'live' || FC.status.yt === 'live' || FC.status.kk === 'live')) txt = FC.t('Підключено · чекаємо на повідомлення');
     if (!txt) return [];
     const el = document.createElement('div');
     el.className = 'ph';
@@ -120,6 +134,7 @@
 
   function renderAll() {
     if (FEAT) { list.replaceChildren(...(featured ? [build(FC.fromApi(featured))] : [])); return; }
+    if (ALERTS) return;
     const items = visible().map((m) => { const el = build(m); el.style.animation = 'none'; return el; });
     if (FC.s.newestTop) items.reverse();
     list.replaceChildren(...(hist.length ? items : placeholder()));
@@ -152,7 +167,7 @@
   // "Hide when quiet": the whole chat shows for idleHide seconds after a message or a settings change.
   let idleTimer = 0;
   function wake() {
-    if (FEAT) return;
+    if (FEAT || ALERTS) return;
     clearTimeout(idleTimer);
     document.body.classList.remove('idle');
     if (FC.s.idleHide > 0) idleTimer = setTimeout(() => document.body.classList.add('idle'), FC.s.idleHide * 1000);
@@ -191,7 +206,7 @@
   function drawHead() {
     const s = FC.s;
     const st = (k, label) => `<span class="st ${FC.status[k]}"><i></i>${label}${FC.status[k + 'Note'] && FC.status[k] !== 'live' ? ' · ' + FC.t(FC.status[k + 'Note']) : ''}</span>`;
-    const left = (s.hdrTw && s.twitchOn && s.twitch ? st('tw', 'Twitch') : '') + (s.hdrYt && s.ytOn && s.youtube ? st('yt', 'YouTube') : '');
+    const left = (s.hdrTw && s.twitchOn && s.twitch ? st('tw', 'Twitch') : '') + (s.hdrYt && s.ytOn && s.youtube ? st('yt', 'YouTube') : '') + (s.hdrKk && s.kickOn && s.kick ? st('kk', 'Kick') : '');
     const right = (s.hdrViewers && viewers ? `<span>${FC.t('{n} глядач.', { n: viewers })}</span>` : '') + (s.hdrUptime && uptime ? `<span>${uptime}</span>` : '') + (s.hdrClock ? `<span>${hhmm(new Date())}</span>` : '');
     // Nothing to show: no line at all (an empty dark strip looked like a broken window).
     head.innerHTML = left || right ? left + '<span class="sp"></span>' + right : '';
@@ -212,9 +227,10 @@
     const s = FC.s, lines = ['Foldback Chat'];
     if (s.twitchOn && s.twitch) lines.push('Twitch: ' + FC.statusText(FC.status.tw, FC.status.twNote));
     if (s.ytOn && s.youtube) lines.push('YouTube: ' + FC.statusText(FC.status.yt, FC.status.ytNote));
+    if (s.kickOn && s.kick) lines.push('Kick: ' + FC.statusText(FC.status.kk, FC.status.kkNote));
     if (lines.join('\n') !== tip) { tip = lines.join('\n'); FC.host('tip', tip); }
   };
-  const sendStatus = () => FC.apiPush('', { type: 'status', twitch: FC.status.tw, youtube: FC.status.yt, twitchNote: FC.status.twNote || '', youtubeNote: FC.status.ytNote || '' });
+  const sendStatus = () => FC.apiPush('', { type: 'status', twitch: FC.status.tw, youtube: FC.status.yt, kick: FC.status.kk, twitchNote: FC.status.twNote || '', youtubeNote: FC.status.ytNote || '', kickNote: FC.status.kkNote || '' });
   FC.onStatus(() => { drawHead(); if (!hist.length) renderAll(); if (!OBS) { sendTip(); sendStatus(); } });
   setInterval(stats, 60e3);
   setInterval(() => { if (FC.s.hdrClock) drawHead(); }, 15e3);
@@ -259,16 +275,50 @@
     api.onmessage = (e) => { try { const d = JSON.parse(e.data); if (d.type === 'featured' && (d.message?.id || null) !== (featured?.id || null)) feature(d.message); } catch { /* not JSON */ } };
   }
 
+  // The alerts source: events wait in a queue and show one at a time, as a card (like the chat, larger) or a bar
+  // that drops in from the top, each with the events sound.
+  const queue = [];
+  let alerting = false;
+  function alertBar(m) {
+    const el = document.createElement('div');
+    el.className = 'abar';
+    el.style.setProperty('--c', m.kind === 'raid' ? 'var(--ac)' : m.platform === 'yt' ? '#ffcf5a' : 'var(--lav)');
+    el.insertAdjacentHTML('beforeend', ICON[m.platform] || '');
+    const n = document.createElement('b'); n.textContent = m.name;
+    const a = document.createElement('span'); a.className = 'aam'; a.textContent = m.amount;
+    const x = document.createElement('span'); x.className = 'atx'; x.textContent = m.text || '';
+    el.append(n, a, x);
+    return el;
+  }
+  function nextAlert() {
+    if (alerting || !queue.length) return;
+    alerting = true;
+    const m = FC.fromApi(queue.shift());
+    const el = FC.s.alertStyle === 'bar' ? alertBar(m) : build(m);
+    el.classList.add('alert');
+    list.replaceChildren(el);
+    FC.play('event');
+    setTimeout(() => {
+      el.classList.add('gone');
+      setTimeout(() => { el.remove(); alerting = false; nextAlert(); }, 700);
+    }, Math.max(2, FC.s.alertSec || 6) * 1000);
+  }
+  if (ALERTS) {
+    const api = new EventSource('/api/events');
+    api.onmessage = (e) => { try { const d = JSON.parse(e.data); if (d.type === 'message' && d.kind && d.kind !== 'chat') { queue.push(d); nextAlert(); } } catch { /* not JSON */ } };
+  }
+
   let cur = '';
   function connect() {
-    if (FEAT) return;
+    if (FEAT || ALERTS) return;
     const s = FC.s;
-    const tw = [s.twitch, s.twitchOn, s.e7tv, s.eBttv, s.eFfz].join('|'), yt = [s.youtube, s.ytOn].join('|');
-    const [ptw, pyt] = cur ? cur.split('#') : ['', ''];
+    const tw = [s.twitch, s.twitchOn, s.e7tv, s.eBttv, s.eFfz].join('|'), yt = [s.youtube, s.ytOn].join('|'), kk = [s.kick, s.kickOn, s.e7tv].join('|');
+    const [ptw, pyt, pkk] = cur ? cur.split('#') : ['', '', ''];
     if (tw !== ptw) FC.twitch(s.twitch);
     if (yt !== pyt) FC.youtube(s.youtube);
-    if (tw + '#' + yt !== cur) stats();
-    cur = tw + '#' + yt;
+    if (kk !== pkk) FC.kick(FC.KICK ? s.kick : '');
+    if (tw !== ptw) stats();
+    cur = [tw, yt, kk].join('#');
   }
   FC.onChange(() => { apply(); wake(); connect(); sendLang(); if (!OBS) sendTip(); });
   apply();
@@ -281,7 +331,7 @@
     sendTip();
     // First start (or no channel left): the settings open on the channels page.
     const s = FC.s;
-    if (hasHost && !s.twitch && !s.youtube) {
+    if (hasHost && !s.twitch && !s.youtube && !s.kick) {
       try { localStorage.setItem('fc.page', 'channels'); } catch { /* storage unavailable */ }
       FC.host('settings');
     }

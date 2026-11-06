@@ -111,15 +111,16 @@
   // ===== Chat ===========================================================
   group('Чат');
 
-  const twSt = el('<span class="pill"><i></i><span></span></span>'), ytSt = el('<span class="pill"><i></i><span></span></span>');
+  const twSt = el('<span class="pill"><i></i><span></span></span>'), ytSt = el('<span class="pill"><i></i><span></span></span>'), kkSt = el('<span class="pill"><i></i><span></span></span>');
   page('channels', 'Канали', [
     row('Twitch', 'нік каналу; чат читається як гість, без пароля', [check('twitchOn'), text('twitch', t('нік')), twSt]),
     row('YouTube', '@нік каналу, посилання на трансляцію або ID відео; ефір шукається сам раз на хвилину', [check('ytOn'), text('youtube', '@channel'), ytSt]),
-    row('Емоути', 'емоути каналу й загальні з цих сервісів', [labelled(check('e7tv'), '7TV'), labelled(check('eBttv'), 'BTTV'), labelled(check('eFfz'), 'FFZ')]),
+    ...(FC.KICK ? [row('Kick', 'нік каналу або посилання на нього; чат читається як гість, без входу', [check('kickOn'), text('kick', t('нік')), kkSt])] : []),
+    row('Емоути', FC.KICK ? 'емоути каналу й загальні з цих сервісів; для Kick — 7TV' : 'емоути каналу й загальні з цих сервісів', [labelled(check('e7tv'), '7TV'), labelled(check('eBttv'), 'BTTV'), labelled(check('eFfz'), 'FFZ')]),
     row('Передавати YouTube у сцени OBS', 'сцени показуватимуть і YouTube-чат, поки програма відкрита', check('relay')),
   ]);
   setInterval(() => {
-    for (const [p, k] of [[twSt, 'tw'], [ytSt, 'yt']]) {
+    for (const [p, k] of [[twSt, 'tw'], [ytSt, 'yt'], [kkSt, 'kk']]) {
       const v = (localStorage.getItem('fc.status.' + k) || 'off').split('|');
       p.className = 'pill ' + v[0];
       p.lastChild.textContent = FC.statusText(v[0], v[1]);
@@ -209,6 +210,8 @@
     row('Розмір емоутів', '', range('emoteSize', 1, 3, 0.1, (v) => v.toFixed(1) + '×')),
     row('Значок платформи', 'Twitch / YouTube біля ніку', check('showPlatform')),
     row('Значки ролей', 'стрімер, мод, VIP, спонсор, «вперше»', check('showBadges')),
+    when(row('Вигляд значків', 'картинками — як на Twitch (і значок спонсора YouTube); де картинок немає, лишаються слова', select('badgeStyle', [['img', 'Картинками'], ['text', 'Словами']])), () => s.showBadges, 'значки ролей вимкнено'),
+    when(row('Фарби й значки 7TV', 'кольорові ніки й значки, які люди обрали собі в 7TV', check('stv')), () => s.e7tv, 'діє, коли ввімкнено емоути 7TV'),
     row('Час повідомлення', '', check('showTime')),
   ]);
 
@@ -269,7 +272,7 @@
   const hdrOn = () => s.showHeader, hdrNote = 'верхній рядок вимкнено';
   page('header', 'Верхній рядок', [
     row('Показувати верхній рядок', '', check('showHeader')),
-    when(row('Що показувати', '', [labelled(check('hdrTw'), t('Стан Twitch')), labelled(check('hdrYt'), t('Стан YouTube')), labelled(check('hdrViewers'), t('Глядачі')), labelled(check('hdrUptime'), t('Скільки йде стрім')), labelled(check('hdrClock'), t('Годинник'))]), hdrOn, hdrNote),
+    when(row('Що показувати', '', [labelled(check('hdrTw'), t('Стан Twitch')), labelled(check('hdrYt'), t('Стан YouTube')), ...(FC.KICK ? [labelled(check('hdrKk'), t('Стан Kick'))] : []), labelled(check('hdrViewers'), t('Глядачі')), labelled(check('hdrUptime'), t('Скільки йде стрім')), labelled(check('hdrClock'), t('Годинник'))]), hdrOn, hdrNote),
     when(row('Розмір тексту', '', range('hdrSize', 10, 22, 1, px)), hdrOn, hdrNote),
     when(row('Колір тексту', '', color('hdrColor')), hdrOn, hdrNote),
     when(row('Прозорість підкладки', 'темна смуга під рядком; 100% — без неї', range('hdrT', 0, 1, 0.05, pct)), hdrOn, hdrNote),
@@ -318,6 +321,9 @@
     row('Обране повідомлення', 'окреме джерело «Браузер» для повідомлення, обраного в доці: картка як у чаті, лише більша; наприклад 800 × 300', address(`http://${base}/obs?featured`)),
     row('Скільки показувати обране', '0 — доки не прибереш у доці', range('featSec', 0, 60, 1, (v) => (v ? sec(v) : t('доки не прибереш')))),
     row('Розмір обраного', 'відносно розміру тексту чату', range('featScale', 1, 2.5, 0.1, (v) => v.toFixed(1) + '×')),
+    row('Сповіщення', 'ще одне джерело «Браузер»: підписки, рейди, біти, суперчати по одному, зі звуком події; наприклад 800 × 300', address(`http://${base}/obs?alerts`)),
+    row('Вигляд сповіщень', '', select('alertStyle', [['card', 'Картка по центру'], ['bar', 'Смуга згори']])),
+    row('Скільки показувати сповіщення', '', range('alertSec', 3, 20, 1, sec)),
     row('API для інших програм', 'усі повідомлення й події як JSON: WebSocket або SSE (Streamer.bot, Stream Deck, свої скрипти)', [...address(`ws://${base}/api/ws`), button('Опис', () => FC.host('open', 'api'))]),
   ]);
 

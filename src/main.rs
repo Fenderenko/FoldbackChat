@@ -18,7 +18,7 @@ use std::{
 use webview2_com::{
     CoreWebView2EnvironmentOptions, CreateCoreWebView2CompositionControllerCompletedHandler, CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
     Microsoft::Web::WebView2::Win32::{
-        COREWEBVIEW2_COLOR, CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2, ICoreWebView2Controller, ICoreWebView2Controller2, ICoreWebView2Environment, ICoreWebView2Environment3,
+        COREWEBVIEW2_COLOR, COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC, CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2, ICoreWebView2Controller, ICoreWebView2Controller2, ICoreWebView2Environment, ICoreWebView2Environment3,
         ICoreWebView2EnvironmentOptions, ICoreWebView2ExecuteScriptCompletedHandler,
     },
 };
@@ -27,10 +27,10 @@ use windows::{
         Foundation::{CloseHandle, COLORREF, ERROR_ALREADY_EXISTS, ERROR_SUCCESS, GetLastError, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
         Graphics::{
             DirectComposition::{DCompositionCreateDevice2, IDCompositionDesktopDevice, IDCompositionTarget, IDCompositionVisual2},
-            Dwm::{DWMWA_BORDER_COLOR, DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR, DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute},
+            Dwm::{DWMWA_BORDER_COLOR, DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR, DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND, DwmSetWindowAttribute},
             Gdi::{
                 BeginPaint, CreateSolidBrush, DeleteObject, EndPaint, EnumDisplayMonitors, FillRect, FrameRect, GetMonitorInfoW, HDC, HGDIOBJ, HMONITOR, InvalidateRect, MONITOR_DEFAULTTONEAREST, MONITORINFO,
-                MonitorFromWindow, PAINTSTRUCT,
+                MonitorFromPoint, MonitorFromWindow, PAINTSTRUCT,
             },
         },
         System::{
@@ -97,6 +97,12 @@ struct App {
     tip: String,
     /// Settings window in the page's theme: title bar background and text (0xRRGGBB), light mode.
     caption: Option<(u32, u32, bool)>,
+    /// Tray menu: a card page (/menu) in a popup window, made at start and shown by the tray icon. `menu_at` — the
+    /// cursor when it opened, `menu_h` — the card's height in CSS pixels (the page reports it).
+    menu: HWND,
+    menu_ctl: Option<ICoreWebView2Controller>,
+    menu_at: POINT,
+    menu_h: i32,
 }
 
 const TR_LANGS: [&str; 8] = ["en", "de", "fr", "es", "pt", "pl", "it", "tr"];
@@ -227,15 +233,20 @@ fn main() {
         let small = LoadImageW(Some(inst.into()), PCWSTR(1 as *const u16), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR)
             .map(|h| HICON(h.0))
             .unwrap_or(icon);
-        let classes: [(PCWSTR, WNDPROC, Option<windows::Win32::Graphics::Gdi::HBRUSH>); 4] = [
+        // One PCWSTR for the menu class: the class style below tells it apart by pointer.
+        let menu_class = w!("FoldbackChatMenu");
+        let classes: [(PCWSTR, WNDPROC, Option<windows::Win32::Graphics::Gdi::HBRUSH>); 5] = [
             (w!("FoldbackChatMain"), Some(main_proc), None),
             (w!("FoldbackChatOverlay"), Some(overlay_proc), None),
             (w!("FoldbackChatSettings"), Some(settings_proc), Some(CreateSolidBrush(COLORREF(0x100f0f)))),
             (w!("FoldbackChatFrame"), Some(frame_proc), None),
+            (menu_class, Some(menu_proc), Some(CreateSolidBrush(COLORREF(0x100f0f)))),
         ];
         for (name, proc_, bg) in classes {
             let wc = WNDCLASSEXW {
                 cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
+                // The tray card casts a shadow like a menu.
+                style: if name == menu_class { CS_DROPSHADOW } else { WNDCLASS_STYLES(0) },
                 lpfnWndProc: proc_,
                 hInstance: inst.into(),
                 hCursor: LoadCursorW(None, IDC_ARROW).unwrap_or_default(),
@@ -676,7 +687,12 @@ fn tray_theme() {
     }
 }
 
+/// The tray card; the plain Windows menu until the card's page exists (WebView2 still starting).
 fn tray_menu() {
+    if app(|a| a.menu_ctl.is_some()) {
+        show_menu();
+        return;
+    }
     let (main, shown, locked) = app(|a| (a.main, a.shown, a.locked));
     unsafe {
         let Ok(m) = CreatePopupMenu() else { return };
@@ -738,6 +754,15 @@ fn command(q: &str) {
                 }
             }
         }
+        Some("menusize") => {
+            if let Ok(h) = v.parse::<i32>() {
+                app(|a| a.menu_h = h.clamp(80, 800));
+                if unsafe { IsWindowVisible(app(|a| a.menu)).as_bool() } {
+                    place_menu();
+                }
+            }
+        }
+        Some("menuhide") => hide_menu(),
         Some("tip") => {
             app(|a| a.tip = v.chars().take(127).collect());
             tray_msg(NIM_MODIFY);
@@ -944,6 +969,7 @@ fn create_env() {
                 if app(|a| a.set_pending) {
                     open_settings();
                 }
+                create_menu();
             }
             None => fatal("Потрібен Microsoft Edge WebView2 Runtime."),
         }
@@ -1106,6 +1132,113 @@ fn caption_colors(hwnd: HWND) {
     }
     if let Some(c2) = app(|a| a.set_ctl.clone()).and_then(|c| c.cast::<ICoreWebView2Controller2>().ok()) {
         let _ = unsafe { c2.SetDefaultBackgroundColor(COREWEBVIEW2_COLOR { A: 255, R: (bg >> 16) as u8, G: (bg >> 8) as u8, B: bg as u8 }) };
+    }
+}
+
+// ---------- tray card ----------
+
+/// The tray card's window and page, hidden until the tray icon is right-clicked.
+fn create_menu() {
+    let Some(env) = app(|a| a.env.clone()) else { return };
+    unsafe {
+        let inst = GetModuleHandleW(None).unwrap_or_default();
+        let ex = WS_EX_TOOLWINDOW | WS_EX_TOPMOST;
+        let Ok(hwnd) = CreateWindowExW(ex, w!("FoldbackChatMenu"), w!("Foldback Chat"), WS_POPUP, 0, 0, 280, 300, None, None, Some(inst.into()), None) else { return };
+        let round = DWMWCP_ROUND;
+        let _ = DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &round as *const _ as *const c_void, 4);
+        app(|a| {
+            a.menu = hwnd;
+            a.menu_h = 260;
+        });
+        let h = CreateCoreWebView2ControllerCompletedHandler::create(Box::new(move |res, ctl| {
+            let Some(ctl) = ctl.filter(|_| res.is_ok()) else { return Ok(()) };
+            if let Ok(c2) = ctl.cast::<ICoreWebView2Controller2>() {
+                let bg = caption().0;
+                let _ = c2.SetDefaultBackgroundColor(COREWEBVIEW2_COLOR { A: 255, R: (bg >> 16) as u8, G: (bg >> 8) as u8, B: bg as u8 });
+            }
+            set_bounds(&ctl, hwnd);
+            let _ = ctl.SetIsVisible(false);
+            let wv = ctl.CoreWebView2()?;
+            page_settings(&wv);
+            wv.Navigate(&url("menu"))?;
+            app(|a| a.menu_ctl = Some(ctl));
+            Ok(())
+        }));
+        let _ = env.CreateCoreWebView2Controller(hwnd, &h);
+    }
+}
+
+/// Beside the cursor, inside the work area of its monitor: above and to the left of it when the taskbar is at the
+/// bottom right, pushed in from the edges otherwise.
+fn place_menu() {
+    let (hwnd, at, h_css) = app(|a| (a.menu, a.menu_at, a.menu_h));
+    unsafe {
+        let mon = MonitorFromPoint(at, MONITOR_DEFAULTTONEAREST);
+        let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+        let _ = GetMonitorInfoW(mon, &mut mi);
+        let wa = mi.rcWork;
+        let sc = GetDpiForWindow(hwnd).max(96) as f64 / 96.0;
+        let (w, h) = ((280.0 * sc) as i32, (h_css as f64 * sc).ceil() as i32);
+        let x = (at.x - w).max(wa.left).min(wa.right - w);
+        let y = (at.y - h).max(wa.top).min(wa.bottom - h);
+        let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), x, y, w, h, SWP_NOACTIVATE);
+    }
+}
+
+fn show_menu() {
+    let (hwnd, ctl, bg) = app(|a| (a.menu, a.menu_ctl.clone(), a.caption.map_or(0x0f_0f10, |c| c.0)));
+    let Some(ctl) = ctl else { return };
+    unsafe {
+        let mut pt = POINT::default();
+        let _ = GetCursorPos(&mut pt);
+        app(|a| a.menu_at = pt);
+        // The card draws the current state and reports its height (menusize), which places the window again.
+        if let Ok(wv) = ctl.CoreWebView2() {
+            let _ = wv.ExecuteScript(w!("window.fcMenu&&fcMenu()"), None::<&ICoreWebView2ExecuteScriptCompletedHandler>);
+        }
+        if let Ok(c2) = ctl.cast::<ICoreWebView2Controller2>() {
+            let _ = c2.SetDefaultBackgroundColor(COREWEBVIEW2_COLOR { A: 255, R: (bg >> 16) as u8, G: (bg >> 8) as u8, B: bg as u8 });
+        }
+        place_menu();
+        let _ = ShowWindow(hwnd, SW_SHOW);
+        // The tray click gives this app the right to take the foreground: the card gets the keys (Esc) and
+        // closes when it loses activation.
+        let _ = SetForegroundWindow(hwnd);
+        let _ = ctl.SetIsVisible(true);
+        let _ = ctl.MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+    }
+}
+
+fn hide_menu() {
+    let (hwnd, ctl) = app(|a| (a.menu, a.menu_ctl.clone()));
+    unsafe {
+        let _ = ShowWindow(hwnd, SW_HIDE);
+        if let Some(c) = ctl {
+            let _ = c.SetIsVisible(false);
+        }
+    }
+}
+
+extern "system" fn menu_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    unsafe {
+        match msg {
+            // A click anywhere else (another window, the desktop, the taskbar) closes the card.
+            WM_ACTIVATE if (wp.0 & 0xffff) as u32 == WA_INACTIVE => {
+                hide_menu();
+                LRESULT(0)
+            }
+            WM_SIZE => {
+                if let Some(c) = app(|a| a.menu_ctl.clone()) {
+                    set_bounds(&c, hwnd);
+                }
+                LRESULT(0)
+            }
+            WM_CLOSE => {
+                hide_menu();
+                LRESULT(0)
+            }
+            _ => DefWindowProcW(hwnd, msg, wp, lp),
+        }
     }
 }
 

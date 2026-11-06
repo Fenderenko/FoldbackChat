@@ -21,6 +21,8 @@ static WS: Mutex<Vec<TcpStream>> = Mutex::new(Vec::new());
 static MSGS: Mutex<VecDeque<(String, String, String)>> = Mutex::new(VecDeque::new());
 /// The featured message: (id, JSON); empty JSON — none.
 static FEATURED: Mutex<(String, String)> = Mutex::new((String::new(), String::new()));
+/// The last channel states (a "status" event), for the tray menu.
+static STATUS: Mutex<String> = Mutex::new(String::new());
 
 /// One event to every SSE and WebSocket client; a write error drops the client.
 pub fn broadcast(json: &str) {
@@ -58,7 +60,16 @@ pub fn push(query: &str, body: &[u8]) {
             m.retain(|x| !login.is_empty() && x.1 != login);
         }
     }
+    if json.contains("\"type\":\"status\"") {
+        *STATUS.lock().unwrap() = json.clone();
+    }
     broadcast(&json);
+}
+
+/// The last "status" event, or one with every channel off.
+pub fn status() -> String {
+    let s = STATUS.lock().unwrap();
+    if s.is_empty() { r#"{"type":"status","twitch":"off","youtube":"off","twitchNote":"","youtubeNote":""}"#.to_string() } else { s.clone() }
 }
 
 pub fn recent() -> String {
