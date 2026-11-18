@@ -1,0 +1,132 @@
+/* The GitHub Pages site in the look of the app: the Black hole theme, neutral surfaces, 1 px lines, Inter and
+   IBM Plex Mono as in the settings and the chat. */
+:root {
+  --bg: #0f0f10;
+  --s1: #161618;
+  --s2: #1d1d20;
+  --text: #ececec;
+  --muted: #8e8e93;
+  --line: rgba(255, 255, 255, .08);
+  --line2: rgba(255, 255, 255, .14);
+  --link: #c9ccd3;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f4f4f5;
+    --s1: #ffffff;
+    --s2: #ebebed;
+    --text: #17171a;
+    --muted: #5f5f66;
+    --line: rgba(0, 0, 0, .08);
+    --line2: rgba(0, 0, 0, .14);
+    --link: #2d2d33;
+    color-scheme: light;
+  }
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.6 "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--link); text-decoration: underline; text-decoration-color: var(--line2); text-underline-offset: 3px; }
+a:hover { text-decoration-color: currentColor; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 20px; }
+
+/* the top bar */
+.bar {
+  position: sticky; top: 0; z-index: 10;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(10px);
+}
+.bar-in { display: flex; align-items: center; gap: 16px; height: 56px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 600; font-size: 16px; text-decoration: none; }
+.links { margin-left: auto; display: flex; align-items: center; gap: 18px; font-size: 14px; }
+.links a { color: var(--muted); text-decoration: none; }
+.links a:hover { color: var(--text); }
+
+/* buttons: the primary one in the text colour, as the app's switches */
+.btn, .ghost {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 34px; padding: 0 14px; border-radius: 8px; font-weight: 500; font-size: 14px; text-decoration: none;
+}
+.links a.btn, .btn { background: var(--text); color: var(--bg); }
+.btn:hover { opacity: .9; }
+.ghost { border: 1px solid var(--line2); color: var(--text); }
+.ghost:hover { background: var(--s2); }
+.big { height: 44px; padding: 0 20px; font-size: 15px; border-radius: 10px; }
+
+/* the hero: the words on the left, the chat over a game on the right */
+.hero { padding: 56px 0 28px; }
+.hero-in { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 40px; align-items: center; }
+.hero h1 { font-size: 46px; line-height: 1.08; margin: 0 0 16px; letter-spacing: -.025em; font-weight: 700; }
+.tag { margin: 0; color: var(--muted); font-size: 18px; max-width: 420px; }
+.cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 26px; }
+.fine { color: var(--muted); font: 12.5px "IBM Plex Mono", Consolas, monospace; letter-spacing: .02em; margin-top: 16px; }
+.hero-shot {
+  display: block; width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line2);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .45);
+}
+
+/* the README: its own title and language line are in the bar and the hero already */
+.content > h1:first-child, .content > h1:first-child + p,
+.content > .markdown-heading:first-child, .content > .markdown-heading:first-child + p { display: none; }
+.content { padding-bottom: 40px; max-width: 860px; }
+.content h2 {
+  font-size: 24px; margin: 52px 0 14px; padding-top: 22px;
+  border-top: 1px solid var(--line); letter-spacing: -.01em;
+}
+.content h3 { font-size: 18px; margin: 28px 0 10px; }
+.content p, .content li { color: color-mix(in srgb, var(--text) 86%, var(--muted)); }
+.content strong { color: var(--text); font-weight: 600; }
+.content ul, .content ol { padding-left: 22px; }
+.content li { margin: 6px 0; }
+.content li::marker { color: var(--muted); }
+
+/* the screenshot rows: the README's own heights, never wider than the page */
+.content p[align="center"] {
+  display: flex; gap: 14px; justify-content: center; align-items: center; flex-wrap: wrap; margin: 30px 0 10px;
+}
+.content p[align="center"] img {
+  display: block; width: auto; max-width: 100%; object-fit: contain; border-radius: 12px; border: 1px solid var(--line2);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .35); background: var(--s1);
+}
+/* the support heart is a link, not a screenshot */
+.content p[align="center"] a img { border: 0; box-shadow: none; background: none; border-radius: 0; }
+.content img { max-width: 100%; }
+
+/* code and tables */
+code {
+  font: 13.5px/1.5 "IBM Plex Mono", Consolas, monospace;
+  background: var(--s2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px;
+}
+pre {
+  background: var(--s1); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto;
+}
+pre code { background: none; border: 0; padding: 0; }
+.highlight { background: none; }
+table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 15px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 500; }
+hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
+
+.foot {
+  display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  border-top: 1px solid var(--line); padding-top: 18px; padding-bottom: 34px; color: var(--muted); font-size: 14px;
+}
+.foot a { color: var(--muted); }
+
+@media (max-width: 760px) {
+  .hero-in { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .hero h1 { font-size: 36px; }
+}
+@media (max-width: 560px) {
+  .links a:not(.btn) { display: none; }
+  .hero { padding-top: 36px; }
+}

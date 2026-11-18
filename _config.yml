@@ -1,0 +1,19 @@
+# GitHub Pages: the README pages in Foldback Chat's own look (_layouts/default.html, assets/site.css).
+title: Foldback Chat
+description: Twitch and YouTube chat in one transparent overlay for Windows — over your game or in OBS
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+# the app's sources are not part of the site
+exclude:
+  - src
+  - web
+  - tools
+  - target
+  - build.rs
+  - Cargo.toml
+  - Cargo.lock
+  - CLAUDE.md
+  - FoldbackChat.exe

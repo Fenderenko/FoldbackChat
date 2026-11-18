@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+{%- assign uk = false -%}{%- if page.path contains '.uk.' -%}{%- assign uk = true -%}{%- endif -%}
+<html lang="{% if uk %}uk{% else %}en{% endif %}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ site.title }}{% if uk %} — чат Twitch і YouTube поверх гри або в OBS{% else %} — {{ site.description }}{% endif %}</title>
+  <meta name="description" content="{% if uk %}Чат Twitch і YouTube в одному прозорому оверлеї для Windows: поверх гри, де його бачиш лише ти, або в OBS для глядачів{% else %}{{ site.description }}{% endif %}">
+  <meta name="color-scheme" content="dark light">
+  <link rel="icon" type="image/png" href="{{ '/assets/icon48.png' | relative_url }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="{{ '/assets/site.css' | relative_url }}">
+</head>
+<body>
+  <header class="bar">
+    <div class="wrap bar-in">
+      <a class="brand" href="{% if uk %}{{ '/README.uk.html' | relative_url }}{% else %}{{ '/' | relative_url }}{% endif %}">
+        <svg class="mark" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 1 0 18H4.6A1.6 1.6 0 0 1 3 19.4V12a9 9 0 0 1 9-9z" fill="currentColor"/></svg>
+        <span>Foldback Chat</span>
+      </a>
+      <nav class="links">
+        <a href="{% if uk %}{{ '/' | relative_url }}{% else %}{{ '/README.uk.html' | relative_url }}{% endif %}">{% if uk %}English{% else %}Українська{% endif %}</a>
+        <a href="https://github.com/Fenderenko/FoldbackChat">GitHub</a>
+        <a class="btn" href="https://github.com/Fenderenko/FoldbackChat/releases/latest">{% if uk %}Завантажити{% else %}Download{% endif %}</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="wrap hero-in">
+      <div class="hero-text">
+        <h1>{% if uk %}Твій чат — поверх гри.{% else %}Your chat, over your game.{% endif %}</h1>
+        <p class="tag">{% if uk %}Чат Twitch і YouTube в одному прозорому оверлеї, який бачиш лише ти, — або в OBS для глядачів.{% else %}Twitch and YouTube chat in one transparent overlay that only you see — or in OBS, for your viewers.{% endif %}</p>
+        <div class="cta">
+          <a class="btn big" href="https://github.com/Fenderenko/FoldbackChat/releases/latest">{% if uk %}Завантажити для Windows{% else %}Download for Windows{% endif %}</a>
+          <a class="ghost big" href="https://github.com/Fenderenko/FoldbackChat">{% if uk %}Код на GitHub{% else %}Source on GitHub{% endif %}</a>
+        </div>
+        <p class="fine">{% if uk %}Windows 10 / 11 · безкоштовно · GPL-3.0{% else %}Windows 10 / 11 · free · GPL-3.0{% endif %}</p>
+      </div>
+      <img class="hero-shot" src="{{ '/docs/hero.png' | relative_url }}" width="640" height="420" alt="{% if uk %}Чат Foldback Chat поверх гри: повідомлення Twitch і YouTube, підписка, суперчат{% else %}Foldback Chat over a game: Twitch and YouTube messages, a sub, a Super Chat{% endif %}">
+    </div>
+  </section>
+
+  <main class="wrap content">
+{{ content }}
+  </main>
+
+  <footer class="wrap foot">
+    <span>Foldback Chat · Fenderenko</span>
+    <a href="https://github.com/Fenderenko/FoldbackChat/releases">{% if uk %}Усі випуски{% else %}All releases{% endif %}</a>
+  </footer>
+</body>
+</html>
